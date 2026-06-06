@@ -19,7 +19,31 @@ export interface CorrectionIssue {
   corrected: string
   explanation: string
   category: 'grammar' | 'expression' | 'vocabulary'
-  severity?: 'high' | 'medium' | 'low'
+  severity: 'high' | 'medium' | 'low'
+}
+
+/** Dev A → Dev B via backend EventBus (see PROTOCOL.md) */
+export interface TurnTranscriptReadyEvent {
+  session_id: string
+  turn_id: string
+  scene_id: string
+  difficulty: number
+  persona_id: string
+  transcript: string
+  wav_audio_b64: string | null
+  assistant_reply_text: string
+  turn_duration_ms: number
+}
+
+/** Dev B internal aggregated turn analysis (not sent over WS directly) */
+export interface TurnAnalysisReadyEvent {
+  session_id: string
+  turn_id: string
+  pronunciation: PronScore | null
+  corrections: CorrectionIssue[]
+  grammar_score: number | null
+  expression_score: number | null
+  vocabulary_score: number | null
 }
 
 export interface TurnRecord {

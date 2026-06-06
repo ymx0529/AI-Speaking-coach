@@ -65,6 +65,12 @@ export const useAppStore = defineStore('app', {
     setCorrectionsResult(turnId: string, issues: CorrectionIssue[]) {
       this.correctionsByTurn[turnId] = issues
     },
+
+    resetSummaryState() {
+      this.summary = null
+      this.summaryReady = false
+      this.summaryLoading = false
+    },
     // ─────────────────────────────────────────────────────────
   },
 })

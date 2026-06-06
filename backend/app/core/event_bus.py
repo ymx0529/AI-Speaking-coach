@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+# Handlers receive any published event (e.g. TurnTranscriptReadyEvent, SpeakerTurnEvent).
 _handlers: list[Callable[[Any], Awaitable[None]]] = []
 
 
