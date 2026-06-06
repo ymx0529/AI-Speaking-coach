@@ -7,8 +7,9 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from app.modules.conversation.audio_utils import merge_sorted_chunks
-from app.modules.conversation.azure_speech import build_partial_transcript, synthesize_reply_audio, transcribe_chunks
+from app.modules.conversation.azure_speech import synthesize_reply_audio
 from app.modules.conversation.llm_client import generate_reply
+from app.modules.conversation.qwen_stt import build_partial_transcript, transcribe_chunks
 from app.core import event_bus, ws_hub
 from app.core.types import (
     CorrectionIssue,
@@ -28,6 +29,12 @@ from app.modules.conversation.session_manager import (
 )
 
 router = APIRouter()
+
+
+def _encoding_to_source_format(encoding: str | None) -> str:
+    if encoding == "wav_pcm16":
+        return "wav"
+    return "webm"
 
 
 @router.get("/api/sessions/{session_id}/status", response_model=SessionStatusResponse)
@@ -178,7 +185,23 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                         )
                         continue
 
-                    final_text, duration_ms = transcribe_chunks(list(enumerate(finalized_turn.audio_chunks)))
+                    try:
+                        final_text, duration_ms = transcribe_chunks(
+                            list(enumerate(finalized_turn.audio_chunks)),
+                            source_format=_encoding_to_source_format(payload.get("encoding")),
+                        )
+                    except Exception as exc:
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "session_id": session_id,
+                                "turn_id": finalized_turn.turn_id,
+                                "code": "ASR_FAILED",
+                                "message": str(exc),
+                                "retryable": True,
+                            }
+                        )
+                        continue
                     await websocket.send_json(
                         {
                             "type": "user_turn.final",

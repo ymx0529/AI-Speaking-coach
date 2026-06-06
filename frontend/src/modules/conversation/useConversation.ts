@@ -20,9 +20,31 @@ function getAudioMimeType(format?: string) {
   return 'audio/mpeg'
 }
 
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buffer = await blob.arrayBuffer()
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte)
+  })
+  return btoa(binary)
+}
+
 export function useConversation() {
   const store = useAppStore()
   const errorMessage = ref('')
+  const recordingSupported = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined'
+  let mediaRecorder: MediaRecorder | null = null
+  let mediaStream: MediaStream | null = null
+  let chunkSeq = 0
+  let stopRequested = false
+
+  function cleanupMediaStream() {
+    mediaRecorder = null
+    mediaStream?.getTracks().forEach((track) => track.stop())
+    mediaStream = null
+    store.isRecording = false
+  }
 
   function playAssistantAudio(data: string, format?: string) {
     try {
@@ -107,6 +129,70 @@ export function useConversation() {
     }, 250)
   }
 
+  async function startRecording() {
+    if (!store.sessionId) {
+      errorMessage.value = '当前没有可用会话，请先选择场景。'
+      return
+    }
+
+    if (!recordingSupported) {
+      errorMessage.value = '当前浏览器不支持录音，请先使用模拟模式。'
+      return
+    }
+
+    errorMessage.value = ''
+    store.resetTurn()
+    chunkSeq = 0
+    stopRequested = false
+
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm'
+      mediaRecorder = new MediaRecorder(mediaStream, { mimeType })
+      store.isRecording = true
+
+      mediaRecorder.ondataavailable = async (event: BlobEvent) => {
+        if (!event.data || event.data.size === 0 || !store.sessionId) return
+        const chunk = await blobToBase64(event.data)
+        const isLast = stopRequested
+        ws.send({
+          type: 'audio.append',
+          session_id: store.sessionId,
+          turn_id: store.currentTurnId,
+          seq: chunkSeq++,
+          encoding: 'webm_opus',
+          chunk,
+          is_last: isLast,
+          client_ts: Date.now(),
+        })
+        if (isLast) {
+          stopRequested = false
+          cleanupMediaStream()
+        }
+      }
+
+      mediaRecorder.onerror = () => {
+        errorMessage.value = '录音过程中发生错误，请重试。'
+        cleanupMediaStream()
+      }
+
+      mediaRecorder.start(400)
+    } catch {
+      errorMessage.value = '无法访问麦克风，请检查浏览器权限设置。'
+      cleanupMediaStream()
+    }
+  }
+
+  function stopRecording() {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+      return
+    }
+    stopRequested = true
+    mediaRecorder.stop()
+  }
+
   async function finishCurrentSession() {
     if (!store.sessionId) {
       errorMessage.value = '当前没有可结束的会话。'
@@ -138,8 +224,11 @@ export function useConversation() {
 
   return {
     errorMessage,
+    recordingSupported,
     handleServerMessage,
     finishCurrentSession,
+    startRecording,
+    stopRecording,
     runMockTurn,
   }
 }

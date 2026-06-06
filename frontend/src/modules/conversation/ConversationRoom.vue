@@ -24,7 +24,7 @@
           <div class="grid gap-6 px-6 py-6 lg:grid-cols-[1.4fr_0.8fr]">
             <div class="space-y-5">
               <div class="rounded-[28px] bg-gradient-to-r from-indigo-50 via-white to-sky-50 px-5 py-4 text-sm text-slate-500">
-                当前版本会模拟两段音频分片上传：第一段返回实时识别中间结果，第二段返回最终文本，并继续生成 AI 回复与语音播放。
+                当前版本支持真实录音分片上传；如果浏览器或配置未准备好，你也可以继续用模拟模式验证主链路。
               </div>
 
               <div class="space-y-4">
@@ -33,7 +33,7 @@
                     <div>
                       <div class="text-xs uppercase tracking-[0.14em] text-slate-400">ASR Text</div>
                       <div class="mt-3 text-base leading-7 text-slate-800">
-                        {{ store.asrText || '还没有识别文本，点击下方按钮开始模拟一轮语音输入。' }}
+                        {{ store.asrText || '还没有识别文本，点击下方按钮开始一轮真实录音或模拟输入。' }}
                       </div>
                     </div>
                     <div class="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-400 shadow-sm">
@@ -61,14 +61,24 @@
               <div class="flex flex-col items-center gap-4 rounded-[28px] border border-slate-100 bg-white px-6 py-7 shadow-sm">
                 <button
                   class="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-blue-500 text-3xl text-white shadow-[0_18px_40px_rgba(84,108,255,0.3)] transition hover:scale-[1.02]"
-                  @click="runMockTurn()"
+                  @click="toggleRecording()"
                 >
-                  🎙
+                  {{ store.isRecording ? '■' : '🎙' }}
                 </button>
                 <div class="text-center">
-                  <div class="text-sm font-semibold text-slate-900">点击开始体验</div>
-                  <div class="mt-1 text-xs text-slate-400">模拟一轮实时识别、AI 回复与语音播放</div>
+                  <div class="text-sm font-semibold text-slate-900">
+                    {{ store.isRecording ? '点击结束录音' : '点击开始录音' }}
+                  </div>
+                  <div class="mt-1 text-xs text-slate-400">
+                    {{ recordingSupported ? '使用真实麦克风进行语音上传' : '当前浏览器不支持录音，请使用模拟模式' }}
+                  </div>
                 </div>
+                <button
+                  class="rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                  @click="runMockTurn()"
+                >
+                  使用模拟模式
+                </button>
                 <div v-if="errorMessage" class="rounded-full bg-rose-50 px-4 py-2 text-sm text-rose-700">
                   {{ errorMessage }}
                 </div>
@@ -99,11 +109,20 @@ import PronScoreBar from './PronScoreBar.vue'
 import { useConversation } from './useConversation'
 
 const store = useAppStore()
-const { errorMessage, finishCurrentSession, handleServerMessage, runMockTurn } = useConversation()
+const { errorMessage, finishCurrentSession, handleServerMessage, recordingSupported, runMockTurn, startRecording, stopRecording } =
+  useConversation()
 let unsubscribe: (() => void) | null = null
 
 async function finishSession() {
   await finishCurrentSession()
+}
+
+async function toggleRecording() {
+  if (store.isRecording) {
+    stopRecording()
+    return
+  }
+  await startRecording()
 }
 
 onMounted(() => {

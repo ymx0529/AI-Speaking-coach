@@ -12,6 +12,7 @@ dependencies = [
     "azure-cognitiveservices-speech>=1.38",
     "openai>=1.30",
     "pydub>=0.25",
+    "websocket-client>=1.8",
 ]
 
 [project.optional-dependencies]

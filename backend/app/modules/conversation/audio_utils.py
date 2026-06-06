@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import base64
 import binascii
+from io import BytesIO
+
+from pydub import AudioSegment
 
 
 def decode_base64_chunk(data: str) -> bytes:
@@ -17,5 +20,44 @@ def merge_sorted_chunks(chunks: list[tuple[int, str]]) -> bytes:
 
 
 def mock_bytes_to_text(audio_bytes: bytes) -> str:
-    text = audio_bytes.decode("utf-8", errors="ignore").strip()
-    return " ".join(text.split())
+    decoded = audio_bytes.decode("utf-8", errors="ignore").strip()
+    normalized = " ".join(decoded.split())
+    if not normalized:
+        return ""
+
+    printable_count = sum(char.isprintable() for char in normalized)
+    printable_ratio = printable_count / max(len(normalized), 1)
+    if printable_ratio < 0.85:
+        return ""
+    return normalized
+
+
+def _normalize_audio_segment(audio_bytes: bytes, *, source_format: str) -> AudioSegment:
+    try:
+        segment = AudioSegment.from_file(BytesIO(audio_bytes), format=source_format)
+    except Exception as exc:
+        raise ValueError(f"Failed to decode {source_format} audio bytes") from exc
+    return segment.set_frame_rate(16000).set_channels(1).set_sample_width(2)
+
+
+def convert_audio_bytes_to_wav_bytes(audio_bytes: bytes, *, source_format: str = "webm") -> bytes:
+    normalized = _normalize_audio_segment(audio_bytes, source_format=source_format)
+    output = BytesIO()
+    normalized.export(output, format="wav")
+    return output.getvalue()
+
+
+def convert_audio_bytes_to_pcm16_bytes(audio_bytes: bytes, *, source_format: str = "webm") -> bytes:
+    normalized = _normalize_audio_segment(audio_bytes, source_format=source_format)
+    return normalized.raw_data
+
+
+def convert_audio_chunks_to_pcm16_bytes(chunks: list[tuple[int, str]], *, source_format: str = "webm") -> bytes:
+    combined: AudioSegment | None = None
+    for _, chunk in sorted(chunks, key=lambda item: item[0]):
+        segment = _normalize_audio_segment(decode_base64_chunk(chunk), source_format=source_format)
+        combined = segment if combined is None else combined + segment
+
+    if combined is None:
+        return b""
+    return combined.raw_data
