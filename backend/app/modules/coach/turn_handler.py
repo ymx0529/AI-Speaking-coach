@@ -27,7 +27,7 @@ def _to_transcript_event(event: object) -> TurnTranscriptReadyEvent | None:
             difficulty=1,
             persona_id="",
             transcript=event.user_text,
-            wav_audio_b64=None,
+            audio_b64=None,
             assistant_reply_text=event.ai_reply,
             turn_duration_ms=0,
         )
@@ -47,7 +47,7 @@ async def on_turn_event(event: object) -> None:
     pron_score, (issues, grammar_score, expr_score, vocab_score) = await asyncio.gather(
         pronunciation_service.assess(
             transcript=transcript_event.transcript,
-            wav_audio_b64=transcript_event.wav_audio_b64,
+            wav_audio_b64=transcript_event.audio_b64,
         ),
         correction_service.analyse(
             transcript=transcript_event.transcript,

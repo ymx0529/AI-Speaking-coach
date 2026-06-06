@@ -12,7 +12,7 @@ def _event(**kwargs) -> TurnTranscriptReadyEvent:
         difficulty=2,
         persona_id="interviewer",
         transcript="I enjoy solving problems.",
-        wav_audio_b64=None,
+        audio_b64=None,
         assistant_reply_text="Tell me more.",
         turn_duration_ms=1500,
     )

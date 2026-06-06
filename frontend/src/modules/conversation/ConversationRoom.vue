@@ -16,7 +16,7 @@
         </div>
 
         <div class="mt-6 rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-          最小验证版：点击下方按钮，模拟一次“发送语音后拿到识别、评分、回复、纠错”的完整回合。
+          当前版本会模拟两段音频分片上传：第一段返回实时识别中间结果，第二段返回本轮最终识别文本。
         </div>
 
         <div class="mt-4 flex flex-wrap gap-3">
@@ -24,7 +24,7 @@
             class="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
             @click="runMockTurn()"
           >
-            模拟一轮对话
+            模拟实时识别
           </button>
           <div v-if="errorMessage" class="rounded-full bg-rose-50 px-4 py-2 text-sm text-rose-700">
             {{ errorMessage }}
@@ -59,46 +59,17 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 
 import { useAppStore } from '@/core/store'
-import type { ServerMsg } from '@/core/types'
 import { ws } from '@/core/ws'
 
 import PronScoreBar from './PronScoreBar.vue'
+import { useConversation } from './useConversation'
 
 const store = useAppStore()
-const errorMessage = ref('')
+const { errorMessage, handleServerMessage, runMockTurn } = useConversation()
 let unsubscribe: (() => void) | null = null
-
-function handleServerMessage(msg: ServerMsg) {
-  if (msg.type === 'asr_partial') {
-    store.asrText = msg.text
-  } else if (msg.type === 'asr_final') {
-    store.currentTurnId = msg.turn_id
-    store.asrText = msg.text
-  } else if (msg.type === 'pron_score') {
-    store.currentPronScore = {
-      overall: msg.overall,
-      accuracy: msg.accuracy,
-      fluency: msg.fluency,
-      completeness: msg.completeness,
-      words: msg.words,
-    }
-  } else if (msg.type === 'reply_text') {
-    store.aiReplyText = msg.text
-  } else if (msg.type === 'correction') {
-    store.currentCorrections = msg.issues
-  } else if (msg.type === 'error') {
-    errorMessage.value = msg.message
-  }
-}
-
-function runMockTurn() {
-  errorMessage.value = ''
-  store.resetTurn()
-  ws.send({ type: 'audio_end', seq_count: 0 })
-}
 
 function finishSession() {
   store.endSession()

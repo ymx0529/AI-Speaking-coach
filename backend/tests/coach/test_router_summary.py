@@ -16,7 +16,7 @@ def _event(session_id="sess-x", turn_id="turn-x"):
         difficulty=1,
         persona_id="waiter",
         transcript="I want pasta.",
-        wav_audio_b64=None,
+        audio_b64=None,
         assistant_reply_text="Sure!",
         turn_duration_ms=800,
     )

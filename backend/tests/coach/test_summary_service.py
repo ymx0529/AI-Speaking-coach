@@ -13,7 +13,7 @@ def _event(session_id="s1", turn_id="t1", scene_id="interview", **kwargs):
         difficulty=1,
         persona_id="p",
         transcript="I want pasta.",
-        wav_audio_b64=None,
+        audio_b64=None,
         assistant_reply_text="Sure!",
         turn_duration_ms=1000,
         **kwargs,

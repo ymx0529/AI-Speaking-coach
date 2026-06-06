@@ -1,4 +1,16 @@
 export type Difficulty = 1 | 2 | 3
+export type AudioEncoding = 'webm_opus' | 'wav_pcm16'
+export type AudioFormat = 'mp3' | 'wav_pcm16'
+export type ErrorCode =
+  | 'BAD_REQUEST'
+  | 'SESSION_NOT_FOUND'
+  | 'AUDIO_DECODE_FAILED'
+  | 'ASR_FAILED'
+  | 'LLM_REPLY_FAILED'
+  | 'TTS_FAILED'
+  | 'PRON_ANALYSIS_FAILED'
+  | 'CORRECTION_FAILED'
+  | 'SUMMARY_NOT_READY'
 
 export interface WordScore {
   word: string
@@ -74,8 +86,113 @@ export interface SessionSummaryResponse {
 
 // ── Client → Server ──────────────────────────────────────────
 
-export type ClientMsg =
-  // v1 (kept for backward compat, Dev A will migrate)
+export interface SessionStartMessage {
+  type: 'session.start'
+  session_id: string
+  scene_id: string
+  difficulty: Difficulty
+  persona_id: string
+  client_ts: number
+}
+
+export interface AudioAppendMessage {
+  type: 'audio.append'
+  session_id: string
+  turn_id?: string | null
+  seq: number
+  encoding: AudioEncoding
+  chunk: string
+  is_last: boolean
+  client_ts: number
+}
+
+export interface SessionFinishMessage {
+  type: 'session.finish'
+  session_id: string
+}
+
+export interface SessionReadyMessage {
+  type: 'session.ready'
+  session_id: string
+  server_ts: number
+}
+
+export interface TurnStartedMessage {
+  type: 'turn.started'
+  session_id: string
+  turn_id: string
+  server_ts: number
+}
+
+export interface AsrPartialMessage {
+  type: 'asr.partial'
+  session_id: string
+  turn_id: string
+  text: string
+  server_ts: number
+}
+
+export interface UserTurnFinalMessage {
+  type: 'user_turn.final'
+  session_id: string
+  turn_id: string
+  text: string
+  duration_ms: number
+  server_ts: number
+}
+
+export interface AssistantReplyTextMessage {
+  type: 'assistant.reply_text'
+  session_id: string
+  turn_id: string
+  text: string
+}
+
+export interface AssistantReplyAudioMessage {
+  type: 'assistant.reply_audio'
+  session_id: string
+  turn_id: string
+  audio_format: AudioFormat
+  data: string
+}
+
+export interface AnalysisPronunciationMessage {
+  type: 'analysis.pronunciation'
+  session_id: string
+  turn_id: string
+  overall: number
+  accuracy: number
+  fluency: number
+  completeness: number
+  words: WordScore[]
+}
+
+export interface AnalysisCorrectionMessage {
+  type: 'analysis.correction'
+  session_id: string
+  turn_id: string
+  issues: CorrectionIssue[]
+}
+
+export interface TurnCompletedMessage {
+  type: 'turn.completed'
+  session_id: string
+  turn_id: string
+  server_ts: number
+}
+
+export interface ErrorMessage {
+  type: 'error'
+  session_id?: string | null
+  turn_id?: string | null
+  code: ErrorCode | string
+  message: string
+  retryable?: boolean
+}
+
+export type CanonicalClientMsg = SessionStartMessage | AudioAppendMessage | SessionFinishMessage
+
+export type LegacyClientMsg =
   | { type: 'session_start'; scene_id: string; difficulty: Difficulty; persona_id: string }
   | { type: 'audio_chunk'; data: string; seq: number }
   | { type: 'audio_end'; seq_count: number }
@@ -87,8 +204,21 @@ export type ClientMsg =
 
 // ── Server → Client ──────────────────────────────────────────
 
-export type ServerMsg =
-  // v1 (kept for backward compat, Dev A will migrate)
+export type ClientMsg = CanonicalClientMsg | LegacyClientMsg
+
+export type CanonicalServerMsg =
+  | SessionReadyMessage
+  | TurnStartedMessage
+  | AsrPartialMessage
+  | UserTurnFinalMessage
+  | AssistantReplyTextMessage
+  | AssistantReplyAudioMessage
+  | AnalysisPronunciationMessage
+  | AnalysisCorrectionMessage
+  | TurnCompletedMessage
+  | ErrorMessage
+
+export type LegacyServerMsg =
   | { type: 'asr_partial'; text: string }
   | { type: 'asr_final'; turn_id: string; text: string; duration_ms: number }
   | { type: 'pron_score'; turn_id: string; overall: number; accuracy: number; fluency: number; completeness: number; words: WordScore[] }
@@ -96,16 +226,7 @@ export type ServerMsg =
   | { type: 'reply_audio'; turn_id: string; data: string }
   | { type: 'correction'; turn_id: string; issues: CorrectionIssue[] }
   | { type: 'turn_end'; turn_id: string }
-  // v2 conversation events (Dev A)
-  | { type: 'session.ready'; session_id: string }
-  | { type: 'turn.started'; session_id: string; turn_id: string; server_ts: number }
-  | { type: 'asr.partial'; session_id: string; turn_id: string; text: string; server_ts: number }
-  | { type: 'user_turn.final'; session_id: string; turn_id: string; text: string; duration_ms: number; server_ts: number }
-  | { type: 'assistant.reply_text'; session_id: string; turn_id: string; text: string }
-  | { type: 'assistant.reply_audio'; session_id: string; turn_id: string; audio_format: string; data: string }
-  | { type: 'turn.completed'; session_id: string; turn_id: string; server_ts: number }
-  // v2 coach events (Dev B)
-  | { type: 'analysis.pronunciation'; session_id: string; turn_id: string; overall: number; accuracy: number; fluency: number; completeness: number; words: WordScore[] }
-  | { type: 'analysis.correction'; session_id: string; turn_id: string; issues: CorrectionIssue[] }
-  // error: merged v1+v2 (session_id and retryable optional for backward compat)
-  | { type: 'error'; code: string; message: string; session_id?: string; turn_id?: string; retryable?: boolean }
+  | { type: 'error'; code: string; message: string; retryable?: boolean }
+
+export type ServerMsg = CanonicalServerMsg | LegacyServerMsg
+

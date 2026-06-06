@@ -5,6 +5,10 @@ type Handler = (msg: ServerMsg) => void
 let socket: WebSocket | null = null
 const handlers: Handler[] = []
 
+export const WS_PROTOCOL_VERSION = 'v2'
+export const LEGACY_PROTOCOL_NOTE =
+  '当前仍兼容旧事件名，待 conversation/coach 模块完成切换后移除。'
+
 export const ws = {
   connect(sessionId: string): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -40,6 +44,10 @@ export const ws = {
       const index = handlers.indexOf(handler)
       if (index >= 0) handlers.splice(index, 1)
     }
+  },
+
+  isConnected(): boolean {
+    return socket?.readyState === WebSocket.OPEN
   },
 }
 

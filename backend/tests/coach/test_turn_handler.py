@@ -23,7 +23,7 @@ def _transcript_event(**kwargs) -> TurnTranscriptReadyEvent:
         difficulty=1,
         persona_id="waiter",
         transcript="I want pasta.",
-        wav_audio_b64=None,
+        audio_b64=None,
         assistant_reply_text="Sure!",
         turn_duration_ms=800,
     )
