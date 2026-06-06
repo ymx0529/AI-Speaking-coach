@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 
-import type { CorrectionIssue, PronScore, SessionSummaryResponse } from './types'
+import type { CorrectionIssue, ErrorCode, PronScore, SessionSummaryResponse } from './types'
 
 export const useAppStore = defineStore('app', {
   state: () => ({
@@ -9,6 +9,7 @@ export const useAppStore = defineStore('app', {
     difficulty: 1 as 1 | 2 | 3,
     personaId: null as string | null,
     phase: 'scene_select' as 'scene_select' | 'in_session' | 'summary',
+    sessionReady: false,
     currentTurnId: null as string | null,
     isRecording: false,
     isSpeaking: false,
@@ -17,6 +18,7 @@ export const useAppStore = defineStore('app', {
     currentPronScore: null as PronScore | null,
     currentCorrections: [] as CorrectionIssue[],
     summary: null as SessionSummaryResponse | null,
+    lastError: null as { code: ErrorCode | string; message: string; retryable?: boolean } | null,
   }),
 
   actions: {
@@ -31,10 +33,20 @@ export const useAppStore = defineStore('app', {
       this.difficulty = params.difficulty
       this.personaId = params.personaId
       this.phase = 'in_session'
+      this.sessionReady = false
+      this.lastError = null
     },
 
     endSession() {
       this.phase = 'summary'
+    },
+
+    markSessionReady() {
+      this.sessionReady = true
+    },
+
+    setError(error: { code: ErrorCode | string; message: string; retryable?: boolean }) {
+      this.lastError = error
     },
 
     resetTurn() {
@@ -43,6 +55,7 @@ export const useAppStore = defineStore('app', {
       this.aiReplyText = ''
       this.currentPronScore = null
       this.currentCorrections = []
+      this.lastError = null
     },
   },
 })
