@@ -59,6 +59,7 @@ class SpeakerTurnEvent(BaseModel):
     scene_id: str
 
 
+# Dev A → Dev B via event bus.
 class TurnTranscriptReadyEvent(BaseModel):
     session_id: str
     turn_id: str
@@ -72,6 +73,17 @@ class TurnTranscriptReadyEvent(BaseModel):
     turn_duration_ms: int
 
 
+# Dev B internal: aggregated analysis result for one turn
+class TurnAnalysisReadyEvent(BaseModel):
+    session_id: str
+    turn_id: str
+    pronunciation: PronScore | None = None
+    corrections: list[CorrectionIssue] = Field(default_factory=list)
+    grammar_score: float | None = None
+    expression_score: float | None = None
+    vocabulary_score: float | None = None
+
+
 class SessionSummaryResponse(BaseModel):
     session_id: str
     scene_id: str
@@ -80,11 +92,11 @@ class SessionSummaryResponse(BaseModel):
     accuracy_avg: float
     fluency_avg: float
     completeness_avg: float
-    grammar_score: float = 0.0
-    expression_score: float = 0.0
-    vocabulary_score: float = 0.0
+    grammar_score: float | None = None
+    expression_score: float | None = None
+    vocabulary_score: float | None = None
     corrections_count: int
-    avg_response_latency_ms: float = 0.0
+    avg_response_latency_ms: float | None = None
     ai_feedback: str
     focus_recommendations: list[str] = Field(default_factory=list)
     turns: list[TurnRecord] = Field(default_factory=list)

@@ -60,6 +60,8 @@ export interface SessionSummaryResponse {
   turns: TurnRecord[]
 }
 
+// ── Client → Server ──────────────────────────────────────────
+
 export interface SessionStartMessage {
   type: 'session.start'
   session_id: string
@@ -171,6 +173,12 @@ export type LegacyClientMsg =
   | { type: 'audio_chunk'; data: string; seq: number }
   | { type: 'audio_end'; seq_count: number }
   | { type: 'session_end' }
+  // v2
+  | { type: 'session.start'; session_id: string; scene_id: string; difficulty: Difficulty; persona_id: string; client_ts: number }
+  | { type: 'audio.append'; session_id: string; turn_id: string | null; seq: number; encoding: string; chunk: string; is_last: boolean; client_ts: number }
+  | { type: 'session.finish'; session_id: string }
+
+// ── Server → Client ──────────────────────────────────────────
 
 export type ClientMsg = CanonicalClientMsg | LegacyClientMsg
 
@@ -189,15 +197,7 @@ export type CanonicalServerMsg =
 export type LegacyServerMsg =
   | { type: 'asr_partial'; text: string }
   | { type: 'asr_final'; turn_id: string; text: string; duration_ms: number }
-  | {
-      type: 'pron_score'
-      turn_id: string
-      overall: number
-      accuracy: number
-      fluency: number
-      completeness: number
-      words: WordScore[]
-    }
+  | { type: 'pron_score'; turn_id: string; overall: number; accuracy: number; fluency: number; completeness: number; words: WordScore[] }
   | { type: 'reply_text'; turn_id: string; text: string }
   | { type: 'reply_audio'; turn_id: string; data: string }
   | { type: 'correction'; turn_id: string; issues: CorrectionIssue[] }
