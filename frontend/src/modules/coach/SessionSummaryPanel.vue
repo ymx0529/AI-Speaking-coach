@@ -1,30 +1,82 @@
 <template>
-  <section class="mx-auto max-w-3xl p-6">
-    <div class="rounded-3xl bg-white p-8 shadow-sm">
-      <div class="text-sm text-slate-500">Summary Scaffold</div>
-      <h2 class="mt-2 text-2xl font-semibold text-slate-900">Session {{ sessionId }}</h2>
-      <div v-if="loading" class="mt-4 text-slate-500">正在加载总结...</div>
-      <div v-else-if="errorMessage" class="mt-4 rounded-2xl bg-rose-50 p-4 text-rose-700">
-        {{ errorMessage }}
-      </div>
-      <div v-else-if="summary" class="mt-4 space-y-4">
-        <p class="text-slate-700">{{ summary.ai_feedback }}</p>
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div class="rounded-2xl bg-slate-50 p-4">综合评分：{{ summary.pron_avg }}</div>
-          <div class="rounded-2xl bg-slate-50 p-4">准确度：{{ summary.accuracy_avg }}</div>
-          <div class="rounded-2xl bg-slate-50 p-4">流利度：{{ summary.fluency_avg }}</div>
-          <div class="rounded-2xl bg-slate-50 p-4">完整度：{{ summary.completeness_avg }}</div>
+  <section class="mx-auto max-w-7xl px-6 py-8 lg:px-10">
+    <div class="overflow-hidden rounded-[32px] border border-white/80 bg-white/90 shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
+      <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6 py-5">
+        <div>
+          <button class="text-sm font-medium text-slate-400 transition hover:text-slate-600" @click="restart()">
+            ← 返回首页
+          </button>
+          <div class="mt-3 text-xs uppercase tracking-[0.15em] text-slate-400">Summary Scaffold</div>
+          <h2 class="mt-2 text-3xl font-semibold text-slate-900">Session {{ sessionId }}</h2>
         </div>
-        <div class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
-          共 {{ summary.total_turns }} 轮，累计纠错 {{ summary.corrections_count }} 条。
+        <div class="rounded-full bg-indigo-50 px-4 py-2 text-xs font-semibold text-indigo-600">
+          查看详细报告
         </div>
       </div>
-      <button
-        class="mt-6 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-        @click="restart()"
-      >
-        再练一次
-      </button>
+
+      <div class="grid gap-8 px-6 py-6 lg:grid-cols-[1.35fr_0.8fr]">
+        <div class="space-y-5">
+          <div v-if="loading" class="rounded-[28px] bg-slate-50 px-6 py-10 text-center text-slate-500">
+            正在加载总结...
+          </div>
+
+          <div v-else-if="errorMessage" class="rounded-[28px] bg-rose-50 px-6 py-6 text-rose-700">
+            {{ errorMessage }}
+          </div>
+
+          <template v-else-if="summary">
+            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div
+                v-for="card in scoreCards"
+                :key="card.label"
+                class="rounded-[24px] bg-slate-50 px-5 py-5 shadow-inner"
+              >
+                <div class="text-xs text-slate-400">{{ card.label }}</div>
+                <div class="mt-3 text-3xl font-semibold text-slate-900">{{ card.value }}</div>
+                <div class="mt-1 text-xs text-slate-400">{{ card.unit }}</div>
+              </div>
+            </div>
+
+            <div class="rounded-[28px] bg-gradient-to-r from-indigo-50 via-white to-sky-50 px-6 py-6">
+              <div class="text-sm font-semibold text-slate-900">教练总结</div>
+              <p class="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
+                {{ summary.ai_feedback }}
+              </p>
+            </div>
+
+            <div class="rounded-[28px] bg-slate-50 px-6 py-5 text-sm text-slate-600">
+              共 {{ summary.total_turns }} 轮，累计纠错 {{ summary.corrections_count }} 条。
+            </div>
+          </template>
+        </div>
+
+        <div class="rounded-[30px] bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-6">
+          <div class="space-y-4">
+            <div class="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-semibold text-indigo-500 shadow-sm">
+              学习反馈
+            </div>
+            <div class="text-2xl font-semibold text-slate-900">完成练习后，AI 教练将为你提供更详细的反馈</div>
+            <p class="text-sm leading-7 text-slate-500">
+              当前总结页会优先展示评分卡片、基础统计和反馈文案，后续还能继续接 Dev B 的细化评分与纠错建议。
+            </p>
+          </div>
+
+          <div class="mt-8 flex justify-center">
+            <div class="flex h-48 w-48 items-center justify-center rounded-full bg-white/90 shadow-[0_20px_50px_rgba(84,108,255,0.12)]">
+              <div class="flex h-28 w-28 items-center justify-center rounded-[28px] bg-gradient-to-br from-indigo-500 to-blue-500 text-4xl text-white shadow-lg">
+                ✓
+              </div>
+            </div>
+          </div>
+
+          <button
+            class="mt-8 w-full rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+            @click="restart()"
+          >
+            再练一次
+          </button>
+        </div>
+      </div>
     </div>
   </section>
 </template>
@@ -36,6 +88,7 @@ import { onMounted, ref } from 'vue'
 import { useAppStore } from '@/core/store'
 import type { SessionSummaryResponse } from '@/core/types'
 import { ws } from '@/core/ws'
+import { computed } from 'vue'
 
 const props = defineProps<{
   sessionId: string
@@ -45,6 +98,16 @@ const store = useAppStore()
 const summary = ref<SessionSummaryResponse | null>(null)
 const loading = ref(true)
 const errorMessage = ref('')
+
+const scoreCards = computed(() => {
+  if (!summary.value) return []
+  return [
+    { label: '综合评分', value: Math.round(summary.value.pron_avg), unit: '/100' },
+    { label: '准确度', value: Math.round(summary.value.accuracy_avg), unit: '%' },
+    { label: '流利度', value: Math.round(summary.value.fluency_avg), unit: '%' },
+    { label: '完整度', value: Math.round(summary.value.completeness_avg), unit: '%' },
+  ]
+})
 
 async function loadSummary() {
   loading.value = true
