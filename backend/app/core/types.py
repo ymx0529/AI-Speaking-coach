@@ -104,6 +104,14 @@ class SessionSummaryResponse(BaseModel):
     turns: list[TurnRecord] = Field(default_factory=list)
 
 
+class SessionStatusResponse(BaseModel):
+    session_id: str
+    state: Literal["active", "finished"]
+    summary_ready: bool = False
+    last_turn_id: str | None = None
+    last_error: str | None = None
+
+
 class SessionStartMessage(BaseModel):
     type: Literal["session.start"] = "session.start"
     session_id: str

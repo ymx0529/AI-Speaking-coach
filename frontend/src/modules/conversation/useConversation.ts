@@ -1,7 +1,8 @@
 import { ref } from 'vue'
+import axios from 'axios'
 
 import { useAppStore } from '@/core/store'
-import type { ServerMsg } from '@/core/types'
+import type { ServerMsg, SessionStatusResponse } from '@/core/types'
 import { ws } from '@/core/ws'
 
 const SCENE_SAMPLES: Record<string, [string, string]> = {
@@ -14,9 +15,35 @@ function encodeChunk(text: string) {
   return btoa(text)
 }
 
+function getAudioMimeType(format?: string) {
+  if (format === 'wav_pcm16') return 'audio/wav'
+  return 'audio/mpeg'
+}
+
 export function useConversation() {
   const store = useAppStore()
   const errorMessage = ref('')
+
+  function playAssistantAudio(data: string, format?: string) {
+    try {
+      store.isSpeaking = true
+      const audio = new Audio(`data:${getAudioMimeType(format)};base64,${data}`)
+      audio.onended = () => {
+        store.isSpeaking = false
+      }
+      audio.onerror = () => {
+        store.isSpeaking = false
+      }
+      const playPromise = audio.play()
+      if (playPromise) {
+        void playPromise.catch(() => {
+          store.isSpeaking = false
+        })
+      }
+    } catch {
+      store.isSpeaking = false
+    }
+  }
 
   function handleServerMessage(msg: ServerMsg) {
     if (msg.type === 'session.ready') {
@@ -28,8 +55,12 @@ export function useConversation() {
     } else if (msg.type === 'user_turn.final' || msg.type === 'asr_final') {
       store.currentTurnId = msg.turn_id
       store.asrText = msg.text
-    } else if (msg.type === 'reply_text') {
+    } else if (msg.type === 'assistant.reply_text' || msg.type === 'reply_text') {
       store.aiReplyText = msg.text
+    } else if (msg.type === 'assistant.reply_audio') {
+      playAssistantAudio(msg.data, msg.audio_format)
+    } else if (msg.type === 'reply_audio') {
+      playAssistantAudio(msg.data, 'mp3')
     } else if (msg.type === 'error') {
       errorMessage.value = msg.message
       store.setError({
@@ -76,9 +107,39 @@ export function useConversation() {
     }, 250)
   }
 
+  async function finishCurrentSession() {
+    if (!store.sessionId) {
+      errorMessage.value = '当前没有可结束的会话。'
+      return
+    }
+
+    if (ws.isConnected()) {
+      ws.send({
+        type: 'session.finish',
+        session_id: store.sessionId,
+      })
+    }
+
+    try {
+      const response = await axios.get<SessionStatusResponse>(
+        `http://localhost:8000/api/sessions/${store.sessionId}/status`
+      )
+      if (response.data.state !== 'finished') {
+        errorMessage.value = '会话结束状态未同步完成，请稍后再试。'
+        return
+      }
+    } catch {
+      errorMessage.value = '结束会话失败，无法确认当前状态。'
+      return
+    }
+
+    store.endSession()
+  }
+
   return {
     errorMessage,
     handleServerMessage,
+    finishCurrentSession,
     runMockTurn,
   }
 }

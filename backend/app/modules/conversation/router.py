@@ -1,13 +1,23 @@
 from __future__ import annotations
 
+from base64 import b64encode
 import json
 from uuid import uuid4
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
-from app.modules.conversation.azure_speech import build_partial_transcript, transcribe_chunks
+from app.modules.conversation.audio_utils import merge_sorted_chunks
+from app.modules.conversation.azure_speech import build_partial_transcript, synthesize_reply_audio, transcribe_chunks
+from app.modules.conversation.llm_client import generate_reply
 from app.core import event_bus, ws_hub
-from app.core.types import CorrectionIssue, PronScore, SpeakerTurnEvent, WordScore
+from app.core.types import (
+    CorrectionIssue,
+    PronScore,
+    SessionStatusResponse,
+    SpeakerTurnEvent,
+    TurnTranscriptReadyEvent,
+    WordScore,
+)
 from app.modules.conversation.session_manager import (
     append_audio_chunk,
     append_turn,
@@ -18,6 +28,22 @@ from app.modules.conversation.session_manager import (
 )
 
 router = APIRouter()
+
+
+@router.get("/api/sessions/{session_id}/status", response_model=SessionStatusResponse)
+async def get_session_status(session_id: str) -> SessionStatusResponse:
+    session = get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found.")
+
+    last_turn_id = session.current_turn_id
+    return SessionStatusResponse(
+        session_id=session_id,
+        state=session.session_status,
+        summary_ready=False,
+        last_turn_id=last_turn_id,
+        last_error=None,
+    )
 
 
 def _mock_turn_payload(scene_id: str, turn_index: int) -> tuple[str, str, PronScore, list[CorrectionIssue]]:
@@ -163,6 +189,46 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                             "server_ts": payload.get("client_ts", 0),
                         }
                     )
+                    ai_reply = generate_reply(
+                        scene_id=session.scene_id,
+                        persona_id=session.persona_id,
+                        difficulty=session.difficulty,
+                        history=session.history,
+                        user_text=final_text,
+                    )
+                    await websocket.send_json(
+                        {
+                            "type": "assistant.reply_text",
+                            "session_id": session_id,
+                            "turn_id": finalized_turn.turn_id,
+                            "text": ai_reply,
+                        }
+                    )
+                    audio_data, audio_format = synthesize_reply_audio(ai_reply)
+                    await websocket.send_json(
+                        {
+                            "type": "assistant.reply_audio",
+                            "session_id": session_id,
+                            "turn_id": finalized_turn.turn_id,
+                            "audio_format": audio_format,
+                            "data": audio_data,
+                        }
+                    )
+                    merged_audio_bytes = merge_sorted_chunks(list(enumerate(finalized_turn.audio_chunks)))
+                    await event_bus.publish(
+                        TurnTranscriptReadyEvent(
+                            session_id=session_id,
+                            turn_id=finalized_turn.turn_id,
+                            scene_id=session.scene_id,
+                            difficulty=session.difficulty,
+                            persona_id=session.persona_id,
+                            transcript=final_text,
+                            audio_format="wav_pcm16",
+                            audio_b64=b64encode(merged_audio_bytes).decode("utf-8"),
+                            assistant_reply_text=ai_reply,
+                            turn_duration_ms=duration_ms,
+                        )
+                    )
                     continue
 
                 append_audio_chunk(session_id, payload.get("seq", 0), payload.get("data", ""))
@@ -180,9 +246,16 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                     continue
 
                 turn_id = str(uuid4())
-                user_text, ai_reply, pron_score, corrections = _mock_turn_payload(
+                user_text, _legacy_ai_reply, pron_score, corrections = _mock_turn_payload(
                     session.scene_id,
                     session.turn_count + 1,
+                )
+                ai_reply = generate_reply(
+                    scene_id=session.scene_id,
+                    persona_id=session.persona_id,
+                    difficulty=session.difficulty,
+                    history=session.history,
+                    user_text=user_text,
                 )
                 append_turn(session_id, turn_id, user_text, ai_reply, pron_score, corrections)
 
