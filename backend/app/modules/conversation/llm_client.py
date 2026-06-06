@@ -73,21 +73,16 @@ def generate_reply(
     )
     try:
         client = _get_client()
-        stream = client.chat.completions.create(
+        response = client.chat.completions.create(
             model=settings.qwen_chat_model,
             messages=prompt["messages"],
             extra_body={"enable_thinking": settings.qwen_enable_thinking},
-            stream=True,
+            max_tokens=80,
+            stream=False,
         )
 
-        parts: list[str] = []
-        for chunk in stream:
-            delta = chunk.choices[0].delta
-            content = getattr(delta, "content", None)
-            if content:
-                parts.append(content)
-
-        reply = "".join(parts).strip()
+        reply = response.choices[0].message.content or ""
+        reply = reply.strip()
         if reply:
             return _normalize_reply(reply)
     except Exception:

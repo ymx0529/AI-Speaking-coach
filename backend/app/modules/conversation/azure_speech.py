@@ -44,7 +44,7 @@ def _dashscope_synthesize_wav_bytes(text: str) -> bytes:
         method="POST",
     )
 
-    with urllib.request.urlopen(request, timeout=settings.qwen_request_timeout_sec) as response:
+    with urllib.request.urlopen(request, timeout=settings.cosyvoice_request_timeout_sec) as response:
         response_payload = json.loads(response.read().decode("utf-8"))
 
     audio = response_payload.get("output", {}).get("audio", {})
@@ -52,7 +52,7 @@ def _dashscope_synthesize_wav_bytes(text: str) -> bytes:
     if not isinstance(audio_url, str) or not audio_url:
         raise RuntimeError("CosyVoice did not return an audio URL.")
 
-    with urllib.request.urlopen(audio_url, timeout=settings.qwen_request_timeout_sec) as audio_response:
+    with urllib.request.urlopen(audio_url, timeout=settings.cosyvoice_request_timeout_sec) as audio_response:
         return audio_response.read()
 
 

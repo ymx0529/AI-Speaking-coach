@@ -14,6 +14,7 @@ export const useAppStore = defineStore('app', {
     currentTurnId: null as string | null,
     isRecording: false,
     isSpeaking: false,
+    isReplyAudioPending: false,
     asrText: '',
     aiReplyText: '',
     currentPronScore: null as PronScore | null,
@@ -61,6 +62,7 @@ export const useAppStore = defineStore('app', {
       this.currentTurnId = null
       this.asrText = ''
       this.aiReplyText = ''
+      this.isReplyAudioPending = false
       this.currentPronScore = null
       this.currentCorrections = []
       this.lastError = null
@@ -73,10 +75,16 @@ export const useAppStore = defineStore('app', {
 
     setPronunciationResult(turnId: string, score: PronScore) {
       this.pronunciationByTurn[turnId] = score
+      if (this.currentTurnId === turnId) {
+        this.currentPronScore = score
+      }
     },
 
     setCorrectionsResult(turnId: string, issues: CorrectionIssue[]) {
       this.correctionsByTurn[turnId] = issues
+      if (this.currentTurnId === turnId) {
+        this.currentCorrections = issues
+      }
     },
 
     resetSummaryState() {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from base64 import b64encode
 import json
 from uuid import uuid4
@@ -186,7 +187,8 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                         continue
 
                     try:
-                        final_text, duration_ms = transcribe_chunks(
+                        final_text, duration_ms = await asyncio.to_thread(
+                            transcribe_chunks,
                             list(enumerate(finalized_turn.audio_chunks)),
                             source_format=_encoding_to_source_format(payload.get("encoding")),
                         )
@@ -212,7 +214,8 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                             "server_ts": payload.get("client_ts", 0),
                         }
                     )
-                    ai_reply = generate_reply(
+                    ai_reply = await asyncio.to_thread(
+                        generate_reply,
                         scene_id=session.scene_id,
                         persona_id=session.persona_id,
                         difficulty=session.difficulty,
@@ -225,16 +228,6 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                             "session_id": session_id,
                             "turn_id": finalized_turn.turn_id,
                             "text": ai_reply,
-                        }
-                    )
-                    audio_data, audio_format = synthesize_reply_audio(ai_reply)
-                    await websocket.send_json(
-                        {
-                            "type": "assistant.reply_audio",
-                            "session_id": session_id,
-                            "turn_id": finalized_turn.turn_id,
-                            "audio_format": audio_format,
-                            "data": audio_data,
                         }
                     )
                     merged_audio_bytes = merge_sorted_chunks(list(enumerate(finalized_turn.audio_chunks)))
@@ -251,6 +244,17 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                             assistant_reply_text=ai_reply,
                             turn_duration_ms=duration_ms,
                         )
+                    )
+                    audio_data, audio_format = await asyncio.to_thread(synthesize_reply_audio, ai_reply)
+                    await ws_hub.send(
+                        session_id,
+                        {
+                            "type": "assistant.reply_audio",
+                            "session_id": session_id,
+                            "turn_id": finalized_turn.turn_id,
+                            "audio_format": audio_format,
+                            "data": audio_data,
+                        },
                     )
                     continue
 

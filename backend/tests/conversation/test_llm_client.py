@@ -6,17 +6,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from app.modules.conversation.llm_client import build_reply_prompt, generate_reply
 
 
-class _FakeDelta:
+class _FakeMessage:
     def __init__(self, content: str | None = None):
         self.content = content
 
 
 class _FakeChoice:
     def __init__(self, content: str | None = None):
-        self.delta = _FakeDelta(content)
+        self.message = _FakeMessage(content)
 
 
-class _FakeChunk:
+class _FakeResponse:
     def __init__(self, content: str | None = None):
         self.choices = [_FakeChoice(content)]
 
@@ -27,11 +27,7 @@ class _FakeChatCompletions:
 
     def create(self, **kwargs):
         self.last_kwargs = kwargs
-        return [
-            _FakeChunk("Alex: "),
-            _FakeChunk("Could you tell me more "),
-            _FakeChunk("about your recent project?"),
-        ]
+        return _FakeResponse("Alex: Could you tell me more about your recent project?")
 
 
 class _FakeClient:
@@ -70,8 +66,9 @@ def test_generate_reply_calls_qwen_chat_model(monkeypatch):
     kwargs = fake_client.chat.completions.last_kwargs
     assert kwargs is not None
     assert kwargs["model"] == "qwen3.5-flash"
-    assert kwargs["stream"] is True
-    assert kwargs["extra_body"]["enable_thinking"] is True
+    assert kwargs["stream"] is False
+    assert kwargs["max_tokens"] == 80
+    assert "enable_thinking" in kwargs["extra_body"]
 
 
 def test_generate_reply_falls_back_when_qwen_fails(monkeypatch):

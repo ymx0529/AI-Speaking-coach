@@ -51,8 +51,11 @@
                       </div>
                     </div>
                     <div class="flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600">
-                      <span class="inline-block h-2 w-2 rounded-full" :class="store.isSpeaking ? 'bg-emerald-500' : 'bg-indigo-300'" />
-                      {{ store.isSpeaking ? 'AI 正在播放' : '等待回复' }}
+                      <span
+                        class="inline-block h-2 w-2 rounded-full"
+                        :class="store.isSpeaking ? 'bg-emerald-500' : store.isReplyAudioPending ? 'bg-amber-400' : 'bg-indigo-300'"
+                      />
+                      {{ audioStatusLabel }}
                     </div>
                   </div>
                 </div>
@@ -112,7 +115,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 
 import { useAppStore } from '@/core/store'
 import { ws } from '@/core/ws'
@@ -124,6 +127,12 @@ const store = useAppStore()
 const { debugInfo, errorMessage, finishCurrentSession, handleServerMessage, recordingSupported, runMockTurn, startRecording, stopRecording } =
   useConversation()
 let unsubscribe: (() => void) | null = null
+const audioStatusLabel = computed(() => {
+  if (store.isSpeaking) return 'AI 正在播放'
+  if (store.isReplyAudioPending) return '语音合成中'
+  if (store.aiReplyText) return '文字回复已到'
+  return '等待回复'
+})
 
 async function finishSession() {
   await finishCurrentSession()

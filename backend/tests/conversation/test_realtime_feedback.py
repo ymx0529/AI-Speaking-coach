@@ -20,6 +20,14 @@ def setup_function() -> None:
     session_manager._sessions.clear()
 
 
+def _receive_until(websocket, msg_type: str, *, max_messages: int = 8) -> dict:
+    for _ in range(max_messages):
+        message = websocket.receive_json()
+        if message.get("type") == msg_type:
+            return message
+    raise AssertionError(f"Did not receive message type {msg_type}")
+
+
 def test_audio_append_emits_partial_then_final_transcript():
     client = TestClient(app)
 
@@ -63,9 +71,9 @@ def test_audio_append_emits_partial_then_final_transcript():
                 "client_ts": 300,
             }
         )
-        final_msg = websocket.receive_json()
-        reply_msg = websocket.receive_json()
-        reply_audio_msg = websocket.receive_json()
+        final_msg = _receive_until(websocket, "user_turn.final")
+        reply_msg = _receive_until(websocket, "assistant.reply_text")
+        reply_audio_msg = _receive_until(websocket, "assistant.reply_audio")
 
     assert ready["type"] == "session.ready"
     assert turn_started["type"] == "turn.started"
@@ -143,3 +151,47 @@ def test_audio_append_publishes_turn_transcript_ready_event_once(monkeypatch):
     assert event.assistant_reply_text
     assert event.audio_b64
     assert event.turn_duration_ms > 0
+
+
+def test_audio_append_publishes_analysis_before_tts(monkeypatch):
+    order: list[str] = []
+
+    async def fake_publish(event):
+        order.append("publish")
+
+    def fake_synthesize(text: str):
+        order.append("tts")
+        return _b64("audio"), "wav_pcm16"
+
+    monkeypatch.setattr(event_bus, "publish", fake_publish)
+    monkeypatch.setattr("app.modules.conversation.router.synthesize_reply_audio", fake_synthesize)
+    client = TestClient(app)
+
+    with client.websocket_connect("/ws/session/realtime-3") as websocket:
+        websocket.send_json(
+            {
+                "type": "session.start",
+                "session_id": "realtime-3",
+                "scene_id": "interview",
+                "difficulty": 1,
+                "persona_id": "strict_interviewer",
+                "client_ts": 100,
+            }
+        )
+        websocket.receive_json()
+
+        websocket.send_json(
+            {
+                "type": "audio.append",
+                "session_id": "realtime-3",
+                "turn_id": None,
+                "seq": 0,
+                "encoding": "webm_opus",
+                "chunk": _b64("Hello"),
+                "is_last": True,
+                "client_ts": 200,
+            }
+        )
+        _receive_until(websocket, "assistant.reply_audio")
+
+    assert order == ["publish", "tts"]
