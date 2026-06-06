@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-slate-100">
+  <div class="min-h-screen bg-[radial-gradient(circle_at_top,#f8fbff_0%,#eef4ff_45%,#edf2f7_100%)]">
     <SceneSelector v-if="store.phase === 'scene_select'" />
     <ConversationRoom v-else-if="store.phase === 'in_session'">
       <template #correction>

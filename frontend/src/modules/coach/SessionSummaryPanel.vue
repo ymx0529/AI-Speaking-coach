@@ -1,130 +1,116 @@
 <template>
-  <section class="mx-auto max-w-3xl p-6">
-    <div class="rounded-3xl bg-white p-8 shadow-sm">
-      <div class="text-sm text-slate-500">Session {{ sessionId }}</div>
-      <h2 class="mt-1 text-2xl font-semibold text-slate-900">练习总结</h2>
-
-      <!-- Loading -->
-      <div v-if="store.summaryLoading" class="mt-6 flex items-center gap-2 text-slate-500">
-        <span class="animate-spin">⟳</span>
-        <span>正在加载总结...</span>
-      </div>
-
-      <!-- Error + retry -->
-      <div v-else-if="errorMessage" class="mt-6 space-y-3">
-        <div class="rounded-2xl bg-rose-50 p-4 text-rose-700">{{ errorMessage }}</div>
-        <button
-          class="rounded-full bg-rose-600 px-4 py-2 text-sm font-medium text-white"
-          @click="retry()"
-        >
-          重试
-        </button>
-      </div>
-
-      <!-- Summary content -->
-      <div v-else-if="store.summary" class="mt-6 space-y-5">
-        <p class="text-slate-700 leading-relaxed">{{ store.summary.ai_feedback }}</p>
-
-        <!-- Pronunciation metrics -->
+  <section class="mx-auto max-w-7xl px-6 py-8 lg:px-10">
+    <div class="overflow-hidden rounded-[32px] border border-white/80 bg-white/90 shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
+      <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6 py-5">
         <div>
-          <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">发音评分</div>
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <MetricCard label="综合" :score="store.summary.pron_avg" />
-            <MetricCard label="准确度" :score="store.summary.accuracy_avg" />
-            <MetricCard label="流利度" :score="store.summary.fluency_avg" />
-            <MetricCard label="完整度" :score="store.summary.completeness_avg" />
+          <button class="text-sm font-medium text-slate-400 transition hover:text-slate-600" @click="restart()">
+            ← 返回首页
+          </button>
+          <div class="mt-3 text-xs uppercase tracking-[0.15em] text-slate-400">Summary Scaffold</div>
+          <h2 class="mt-2 text-3xl font-semibold text-slate-900">Session {{ sessionId }}</h2>
+        </div>
+        <div class="rounded-full bg-indigo-50 px-4 py-2 text-xs font-semibold text-indigo-600">
+          查看详细报告
+        </div>
+      </div>
+
+      <div class="grid gap-8 px-6 py-6 lg:grid-cols-[1.35fr_0.8fr]">
+        <div class="space-y-5">
+          <div v-if="store.summaryLoading" class="rounded-[28px] bg-slate-50 px-6 py-10 text-center text-slate-500">
+            正在加载总结...
           </div>
-        </div>
 
-        <!-- Language metrics -->
-        <div
-          v-if="
-            store.summary.grammar_score != null ||
-            store.summary.expression_score != null ||
-            store.summary.vocabulary_score != null
-          "
-        >
-          <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">语言维度</div>
-          <div class="grid gap-3 sm:grid-cols-3">
-            <MetricCard
-              v-if="store.summary.grammar_score != null"
-              label="语法"
-              :score="store.summary.grammar_score"
-            />
-            <MetricCard
-              v-if="store.summary.expression_score != null"
-              label="表达"
-              :score="store.summary.expression_score"
-            />
-            <MetricCard
-              v-if="store.summary.vocabulary_score != null"
-              label="词汇"
-              :score="store.summary.vocabulary_score"
-            />
+          <div v-else-if="errorMessage" class="space-y-4">
+            <div class="rounded-[28px] bg-rose-50 px-6 py-6 text-rose-700">
+              {{ errorMessage }}
+            </div>
+            <button
+              class="rounded-full bg-rose-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-rose-500"
+              @click="retry()"
+            >
+              重新获取
+            </button>
           </div>
-        </div>
 
-        <!-- Stats -->
-        <div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-          共 <span class="font-semibold">{{ store.summary.total_turns }}</span> 轮对话，
-          累计纠错 <span class="font-semibold">{{ store.summary.corrections_count }}</span> 条
-          <span v-if="store.summary.avg_response_latency_ms != null">
-            ，平均响应 {{ store.summary.avg_response_latency_ms }} ms
-          </span>
-        </div>
-
-        <!-- Focus recommendations -->
-        <div v-if="store.summary.focus_recommendations?.length">
-          <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">建议重点</div>
-          <ul class="space-y-2">
-            <li
-              v-for="(rec, i) in store.summary.focus_recommendations"
-              :key="i"
-              class="flex items-start gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-800"
-            >
-              <span class="mt-0.5 shrink-0 text-blue-400">•</span>
-              <span>{{ rec }}</span>
-            </li>
-          </ul>
-        </div>
-
-        <!-- Turn review -->
-        <div v-if="store.summary.turns.length">
-          <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">逐轮回顾</div>
-          <div class="space-y-2">
-            <div
-              v-for="(turn, i) in store.summary.turns"
-              :key="turn.turn_id"
-              class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700"
-            >
-              <div class="mb-1 flex items-center justify-between">
-                <span class="font-medium">第 {{ i + 1 }} 轮</span>
-                <span class="text-xs font-mono">{{ Math.round(turn.pron_score.overall) }} 分</span>
+          <template v-else-if="summary">
+            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div
+                v-for="card in scoreCards"
+                :key="card.label"
+                class="rounded-[24px] bg-slate-50 px-5 py-5 shadow-inner"
+              >
+                <div class="text-xs text-slate-400">{{ card.label }}</div>
+                <div class="mt-3 text-3xl font-semibold text-slate-900">{{ card.value }}</div>
+                <div class="mt-1 text-xs text-slate-400">{{ card.unit }}</div>
               </div>
-              <div class="text-slate-600">你说：{{ turn.user_text }}</div>
-              <div v-if="turn.corrections.length" class="mt-1 text-xs text-amber-700">
-                纠错：{{ turn.corrections.map((c) => `${c.original} → ${c.corrected}`).join(' / ') }}
+            </div>
+
+            <div class="rounded-[28px] bg-gradient-to-r from-indigo-50 via-white to-sky-50 px-6 py-6">
+              <div class="text-sm font-semibold text-slate-900">教练总结</div>
+              <p class="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
+                {{ summary.ai_feedback }}
+              </p>
+            </div>
+
+            <div class="rounded-[28px] bg-slate-50 px-6 py-5 text-sm text-slate-600">
+              共 {{ summary.total_turns }} 轮，累计纠错 {{ summary.corrections_count }} 条
+              <span v-if="summary.avg_response_latency_ms != null">
+                ，平均响应 {{ Math.round(summary.avg_response_latency_ms) }} ms
+              </span>
+            </div>
+
+            <div v-if="summary.focus_recommendations?.length" class="space-y-3">
+              <div class="text-xs font-semibold uppercase tracking-[0.15em] text-slate-400">建议重点</div>
+              <div class="space-y-3">
+                <div
+                  v-for="(rec, index) in summary.focus_recommendations"
+                  :key="`${index}-${rec}`"
+                  class="rounded-[24px] border border-indigo-100 bg-indigo-50/60 px-5 py-4 text-sm leading-6 text-slate-700"
+                >
+                  {{ rec }}
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <div v-else class="rounded-[28px] bg-slate-50 px-6 py-10 text-center text-slate-400">
+            暂无总结数据，请先完成至少一轮对话。
+          </div>
+        </div>
+
+        <div class="rounded-[30px] bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-6">
+          <div class="space-y-4">
+            <div class="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-semibold text-indigo-500 shadow-sm">
+              学习反馈
+            </div>
+            <div class="text-2xl font-semibold text-slate-900">完成练习后，AI 教练将为你提供更详细的反馈</div>
+            <p class="text-sm leading-7 text-slate-500">
+              当前总结页会优先展示评分卡片、基础统计和反馈文案，后续还能继续接 Dev B 的细化评分与纠错建议。
+            </p>
+          </div>
+
+          <div class="mt-8 flex justify-center">
+            <div class="flex h-48 w-48 items-center justify-center rounded-full bg-white/90 shadow-[0_20px_50px_rgba(84,108,255,0.12)]">
+              <div class="flex h-28 w-28 items-center justify-center rounded-[28px] bg-gradient-to-br from-indigo-500 to-blue-500 text-4xl text-white shadow-lg">
+                ✓
               </div>
             </div>
           </div>
+
+          <button
+            class="mt-8 w-full rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+            @click="restart()"
+          >
+            再练一次
+          </button>
         </div>
       </div>
-
-      <!-- Empty (no data yet) -->
-      <p v-else class="mt-6 text-sm text-slate-500">暂无总结数据。</p>
-
-      <button
-        class="mt-8 rounded-full bg-slate-900 px-5 py-2 text-sm font-medium text-white"
-        @click="restart()"
-      >
-        再练一次
-      </button>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { defineComponent, h, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 import { useAppStore } from '@/core/store'
 import { ws } from '@/core/ws'
@@ -135,6 +121,18 @@ const props = defineProps<{ sessionId: string }>()
 const store = useAppStore()
 const { fetchSummary } = useCoach()
 const errorMessage = ref('')
+
+const summary = computed(() => store.summary)
+
+const scoreCards = computed(() => {
+  if (!summary.value) return []
+  return [
+    { label: '综合评分', value: Math.round(summary.value.pron_avg), unit: '/100' },
+    { label: '准确度', value: Math.round(summary.value.accuracy_avg), unit: '%' },
+    { label: '流利度', value: Math.round(summary.value.fluency_avg), unit: '%' },
+    { label: '完整度', value: Math.round(summary.value.completeness_avg), unit: '%' },
+  ]
+})
 
 async function loadSummary() {
   errorMessage.value = ''
@@ -156,25 +154,5 @@ function restart() {
 
 onMounted(() => {
   void loadSummary()
-})
-
-const MetricCard = defineComponent({
-  props: {
-    label: { type: String, required: true },
-    score: { type: Number, required: true },
-  },
-  setup(cardProps) {
-    const color =
-      cardProps.score >= 80
-        ? 'text-emerald-600'
-        : cardProps.score >= 60
-          ? 'text-amber-600'
-          : 'text-rose-600'
-    return () =>
-      h('div', { class: 'rounded-2xl bg-slate-50 p-4 text-center' }, [
-        h('div', { class: `text-2xl font-bold ${color}` }, cardProps.score.toFixed(0)),
-        h('div', { class: 'mt-1 text-xs text-slate-500' }, cardProps.label),
-      ])
-  },
 })
 </script>

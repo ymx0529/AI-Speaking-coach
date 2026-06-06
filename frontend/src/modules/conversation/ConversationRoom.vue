@@ -1,58 +1,89 @@
 <template>
-  <section class="mx-auto max-w-6xl p-6">
-    <div class="grid gap-6 lg:grid-cols-[2fr_1fr]">
-      <div class="rounded-3xl bg-white p-6 shadow-sm">
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="text-sm text-slate-500">Conversation Scaffold</div>
-            <h2 class="text-2xl font-semibold text-slate-900">{{ store.sceneId }}</h2>
-          </div>
-          <button
-            class="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-            @click="finishSession()"
-          >
-            结束
-          </button>
-        </div>
-
-        <div class="mt-6 rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-          当前版本会模拟两段音频分片上传：第一段返回实时识别中间结果，第二段返回本轮最终识别文本。
-        </div>
-
-        <div class="mt-4 flex flex-wrap gap-3">
-          <button
-            class="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white"
-            @click="runMockTurn()"
-          >
-            模拟实时识别
-          </button>
-          <div v-if="errorMessage" class="rounded-full bg-rose-50 px-4 py-2 text-sm text-rose-700">
-            {{ errorMessage }}
-          </div>
-        </div>
-
-        <div class="mt-6 space-y-4">
-          <div class="rounded-2xl bg-slate-50 p-4">
-            <div class="text-xs uppercase tracking-wide text-slate-400">ASR Text</div>
-            <div class="mt-2 text-slate-800">{{ store.asrText || 'Waiting for speech input...' }}</div>
+  <section class="mx-auto max-w-7xl px-6 py-8 lg:px-10">
+    <div class="grid gap-6 xl:grid-cols-[1.7fr_0.85fr]">
+      <div class="space-y-6">
+        <div class="overflow-hidden rounded-[32px] border border-white/80 bg-white/90 shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
+          <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-6 py-5">
+            <div>
+              <div class="text-xs uppercase tracking-[0.16em] text-slate-400">Conversation Scaffold</div>
+              <h2 class="mt-2 text-3xl font-semibold capitalize text-slate-900">{{ store.sceneId }}</h2>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="rounded-full bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-600">
+                {{ store.sessionReady ? '对话已连接' : '准备中' }}
+              </div>
+              <button
+                class="rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+                @click="finishSession()"
+              >
+                结束对话
+              </button>
+            </div>
           </div>
 
-          <div class="rounded-2xl bg-slate-50 p-4">
-            <div class="text-xs uppercase tracking-wide text-slate-400">AI Reply</div>
-            <div class="mt-2 text-slate-800">{{ store.aiReplyText || 'Reply placeholder.' }}</div>
-          </div>
+          <div class="grid gap-6 px-6 py-6 lg:grid-cols-[1.4fr_0.8fr]">
+            <div class="space-y-5">
+              <div class="rounded-[28px] bg-gradient-to-r from-indigo-50 via-white to-sky-50 px-5 py-4 text-sm text-slate-500">
+                当前版本会模拟两段音频分片上传：第一段返回实时识别中间结果，第二段返回最终文本，并继续生成 AI 回复与语音播放。
+              </div>
 
-          <PronScoreBar :score="store.currentPronScore" />
+              <div class="space-y-4">
+                <div class="rounded-[26px] border border-slate-100 bg-slate-50/80 p-5">
+                  <div class="flex items-center justify-between gap-4">
+                    <div>
+                      <div class="text-xs uppercase tracking-[0.14em] text-slate-400">ASR Text</div>
+                      <div class="mt-3 text-base leading-7 text-slate-800">
+                        {{ store.asrText || '还没有识别文本，点击下方按钮开始模拟一轮语音输入。' }}
+                      </div>
+                    </div>
+                    <div class="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-400 shadow-sm">
+                      {{ store.currentTurnId ? '识别中 / 已完成' : '待开始' }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="rounded-[26px] border border-indigo-100 bg-white p-5 shadow-sm">
+                  <div class="flex items-center justify-between gap-4">
+                    <div>
+                      <div class="text-xs uppercase tracking-[0.14em] text-slate-400">AI Reply</div>
+                      <div class="mt-3 text-base leading-7 text-slate-800">
+                        {{ store.aiReplyText || 'Reply placeholder.' }}
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600">
+                      <span class="inline-block h-2 w-2 rounded-full" :class="store.isSpeaking ? 'bg-emerald-500' : 'bg-indigo-300'" />
+                      {{ store.isSpeaking ? 'AI 正在播放' : '等待回复' }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex flex-col items-center gap-4 rounded-[28px] border border-slate-100 bg-white px-6 py-7 shadow-sm">
+                <button
+                  class="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-blue-500 text-3xl text-white shadow-[0_18px_40px_rgba(84,108,255,0.3)] transition hover:scale-[1.02]"
+                  @click="runMockTurn()"
+                >
+                  🎙
+                </button>
+                <div class="text-center">
+                  <div class="text-sm font-semibold text-slate-900">点击开始体验</div>
+                  <div class="mt-1 text-xs text-slate-400">模拟一轮实时识别、AI 回复与语音播放</div>
+                </div>
+                <div v-if="errorMessage" class="rounded-full bg-rose-50 px-4 py-2 text-sm text-rose-700">
+                  {{ errorMessage }}
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-5">
+              <PronScoreBar :score="store.currentPronScore" />
+            </div>
+          </div>
         </div>
       </div>
 
-      <aside class="space-y-4">
-        <div class="rounded-3xl bg-white p-6 shadow-sm">
-          <div class="text-sm font-medium text-slate-900">Coach Panel</div>
-          <div class="mt-3">
-            <slot name="correction" />
-          </div>
-        </div>
+      <aside class="space-y-5">
+        <slot name="correction" />
       </aside>
     </div>
   </section>
