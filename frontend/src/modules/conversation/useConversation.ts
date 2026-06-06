@@ -124,6 +124,7 @@ export function useConversation() {
 
   function playAssistantAudio(data: string, format?: string) {
     try {
+      store.isReplyAudioPending = false
       store.isSpeaking = true
       const audio = new Audio(`data:${getAudioMimeType(format)};base64,${data}`)
       audio.onended = () => {
@@ -139,6 +140,7 @@ export function useConversation() {
         })
       }
     } catch {
+      store.isReplyAudioPending = false
       store.isSpeaking = false
     }
   }
@@ -155,11 +157,13 @@ export function useConversation() {
       store.asrText = msg.text
     } else if (msg.type === 'assistant.reply_text' || msg.type === 'reply_text') {
       store.aiReplyText = msg.text
+      store.isReplyAudioPending = true
     } else if (msg.type === 'assistant.reply_audio') {
       playAssistantAudio(msg.data, msg.audio_format)
     } else if (msg.type === 'reply_audio') {
       playAssistantAudio(msg.data, 'mp3')
     } else if (msg.type === 'error') {
+      store.isReplyAudioPending = false
       errorMessage.value = msg.message
       store.setError({
         code: msg.code,
