@@ -62,6 +62,7 @@ def test_audio_append_emits_partial_then_final_transcript():
             }
         )
         final_msg = websocket.receive_json()
+        reply_msg = websocket.receive_json()
 
     assert ready["type"] == "session.ready"
     assert turn_started["type"] == "turn.started"
@@ -70,3 +71,6 @@ def test_audio_append_emits_partial_then_final_transcript():
     assert final_msg["type"] == "user_turn.final"
     assert final_msg["text"] == "Hello, I would like to introduce myself."
     assert final_msg["duration_ms"] > 0
+    assert reply_msg["type"] == "assistant.reply_text"
+    assert isinstance(reply_msg["text"], str)
+    assert reply_msg["text"]

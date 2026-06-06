@@ -6,6 +6,7 @@ from uuid import uuid4
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.modules.conversation.azure_speech import build_partial_transcript, transcribe_chunks
+from app.modules.conversation.llm_client import generate_reply
 from app.core import event_bus, ws_hub
 from app.core.types import CorrectionIssue, PronScore, SpeakerTurnEvent, WordScore
 from app.modules.conversation.session_manager import (
@@ -163,6 +164,21 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                             "server_ts": payload.get("client_ts", 0),
                         }
                     )
+                    ai_reply = generate_reply(
+                        scene_id=session.scene_id,
+                        persona_id=session.persona_id,
+                        difficulty=session.difficulty,
+                        history=session.history,
+                        user_text=final_text,
+                    )
+                    await websocket.send_json(
+                        {
+                            "type": "assistant.reply_text",
+                            "session_id": session_id,
+                            "turn_id": finalized_turn.turn_id,
+                            "text": ai_reply,
+                        }
+                    )
                     continue
 
                 append_audio_chunk(session_id, payload.get("seq", 0), payload.get("data", ""))
@@ -180,9 +196,16 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                     continue
 
                 turn_id = str(uuid4())
-                user_text, ai_reply, pron_score, corrections = _mock_turn_payload(
+                user_text, _legacy_ai_reply, pron_score, corrections = _mock_turn_payload(
                     session.scene_id,
                     session.turn_count + 1,
+                )
+                ai_reply = generate_reply(
+                    scene_id=session.scene_id,
+                    persona_id=session.persona_id,
+                    difficulty=session.difficulty,
+                    history=session.history,
+                    user_text=user_text,
                 )
                 append_turn(session_id, turn_id, user_text, ai_reply, pron_score, corrections)
 
