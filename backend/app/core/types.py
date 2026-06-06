@@ -35,7 +35,18 @@ class TurnRecord(BaseModel):
     corrections: list[CorrectionIssue] = Field(default_factory=list)
 
 
-# Dev A → Dev B via event bus. Replaces SpeakerTurnEvent.
+# Legacy event published by conversation/router.py (v1 mock).
+# Dev A will replace this with TurnTranscriptReadyEvent once migrated.
+class SpeakerTurnEvent(BaseModel):
+    session_id: str
+    turn_id: str
+    user_text: str
+    pron_score: PronScore
+    ai_reply: str
+    scene_id: str
+
+
+# Dev A → Dev B via event bus (v2 target contract).
 class TurnTranscriptReadyEvent(BaseModel):
     session_id: str
     turn_id: str
@@ -46,10 +57,6 @@ class TurnTranscriptReadyEvent(BaseModel):
     wav_audio_b64: str | None = None  # required for pronunciation assessment
     assistant_reply_text: str
     turn_duration_ms: int
-
-
-# Kept for backward compatibility until Dev A migrates conversation/router.py
-SpeakerTurnEvent = TurnTranscriptReadyEvent
 
 
 # Dev B internal: aggregated analysis result for one turn
