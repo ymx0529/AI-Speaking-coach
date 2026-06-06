@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+from base64 import b64encode
 import json
 from uuid import uuid4
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.modules.conversation.azure_speech import build_partial_transcript, transcribe_chunks
+from app.modules.conversation.audio_utils import merge_sorted_chunks
+from app.modules.conversation.azure_speech import build_partial_transcript, synthesize_reply_audio, transcribe_chunks
 from app.modules.conversation.llm_client import generate_reply
 from app.core import event_bus, ws_hub
-from app.core.types import CorrectionIssue, PronScore, SpeakerTurnEvent, WordScore
+from app.core.types import CorrectionIssue, PronScore, SpeakerTurnEvent, TurnTranscriptReadyEvent, WordScore
 from app.modules.conversation.session_manager import (
     append_audio_chunk,
     append_turn,
@@ -178,6 +180,31 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                             "turn_id": finalized_turn.turn_id,
                             "text": ai_reply,
                         }
+                    )
+                    audio_data, audio_format = synthesize_reply_audio(ai_reply)
+                    await websocket.send_json(
+                        {
+                            "type": "assistant.reply_audio",
+                            "session_id": session_id,
+                            "turn_id": finalized_turn.turn_id,
+                            "audio_format": audio_format,
+                            "data": audio_data,
+                        }
+                    )
+                    merged_audio_bytes = merge_sorted_chunks(list(enumerate(finalized_turn.audio_chunks)))
+                    await event_bus.publish(
+                        TurnTranscriptReadyEvent(
+                            session_id=session_id,
+                            turn_id=finalized_turn.turn_id,
+                            scene_id=session.scene_id,
+                            difficulty=session.difficulty,
+                            persona_id=session.persona_id,
+                            transcript=final_text,
+                            audio_format="wav_pcm16",
+                            audio_b64=b64encode(merged_audio_bytes).decode("utf-8"),
+                            assistant_reply_text=ai_reply,
+                            turn_duration_ms=duration_ms,
+                        )
                     )
                     continue
 
