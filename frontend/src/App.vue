@@ -16,10 +16,14 @@
 <script setup lang="ts">
 import CorrectionPanel from '@/modules/coach/CorrectionPanel.vue'
 import SessionSummaryPanel from '@/modules/coach/SessionSummaryPanel.vue'
+import { useCoach } from '@/modules/coach/useCoach'
 import ConversationRoom from '@/modules/conversation/ConversationRoom.vue'
 import SceneSelector from '@/modules/conversation/SceneSelector.vue'
 import { useAppStore } from '@/core/store'
 
 const store = useAppStore()
+
+// Single WS subscription for all Coach analysis events (v1 + v2)
+useCoach()
 </script>
 

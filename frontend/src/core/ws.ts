@@ -12,7 +12,8 @@ export const LEGACY_PROTOCOL_NOTE =
 export const ws = {
   connect(sessionId: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      socket = new WebSocket(`ws://localhost:8000/ws/session/${sessionId}`)
+      const wsBase = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`
+      socket = new WebSocket(`${wsBase}/ws/session/${sessionId}`)
       socket.onopen = () => resolve()
       socket.onerror = (event) => reject(event)
       socket.onmessage = (event) => {

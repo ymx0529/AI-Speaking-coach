@@ -50,6 +50,8 @@ class TurnRecord(BaseModel):
     corrections: list[CorrectionIssue] = Field(default_factory=list)
 
 
+# Legacy event published by conversation/router.py (v1 mock).
+# Dev A will replace this with TurnTranscriptReadyEvent once migrated.
 class SpeakerTurnEvent(BaseModel):
     session_id: str
     turn_id: str
@@ -59,7 +61,7 @@ class SpeakerTurnEvent(BaseModel):
     scene_id: str
 
 
-# Dev A → Dev B via event bus.
+# Dev A → Dev B via event bus (v2 target contract).
 class TurnTranscriptReadyEvent(BaseModel):
     session_id: str
     turn_id: str
@@ -68,7 +70,7 @@ class TurnTranscriptReadyEvent(BaseModel):
     persona_id: str
     transcript: str
     audio_format: Literal["wav_pcm16"] = "wav_pcm16"
-    audio_b64: str
+    audio_b64: str | None = None  # None when v1 SpeakerTurnEvent is converted
     assistant_reply_text: str
     turn_duration_ms: int
 
