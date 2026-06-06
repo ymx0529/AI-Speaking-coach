@@ -82,7 +82,7 @@ export function useCoach() {
       }
 
       const res = await axios.post<SessionSummaryResponse>(
-        `http://localhost:8000/api/sessions/${id}/summary`,
+        `/api/sessions/${id}/summary`,
       )
       store.summary = res.data
       store.summaryReady = true

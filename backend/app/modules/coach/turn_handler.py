@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from app.core import ws_hub
 from app.core.types import SpeakerTurnEvent, TurnTranscriptReadyEvent
 from app.modules.coach import correction_service, pronunciation_service
 from app.modules.coach import store as coach_store
+
+logger = logging.getLogger(__name__)
 
 
 def _to_transcript_event(event: object) -> TurnTranscriptReadyEvent | None:
@@ -34,8 +37,10 @@ def _to_transcript_event(event: object) -> TurnTranscriptReadyEvent | None:
 async def on_turn_event(event: object) -> None:
     transcript_event = _to_transcript_event(event)
     if transcript_event is None:
+        logger.warning("on_turn_event: unrecognised event type %s, skipping", type(event).__name__)
         return
 
+    logger.info("on_turn_event: session=%s turn=%s", transcript_event.session_id, transcript_event.turn_id)
     record = coach_store.init_turn(transcript_event)
 
     # Run pronunciation and correction in parallel
