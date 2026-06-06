@@ -5,11 +5,13 @@ from uuid import uuid4
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.modules.conversation.azure_speech import build_partial_transcript, transcribe_chunks
 from app.core import event_bus, ws_hub
 from app.core.types import CorrectionIssue, PronScore, SpeakerTurnEvent, WordScore
 from app.modules.conversation.session_manager import (
     append_audio_chunk,
     append_turn,
+    finalize_turn,
     end_session,
     get_session,
     start_session,
@@ -56,6 +58,18 @@ def _mock_turn_payload(scene_id: str, turn_index: int) -> tuple[str, str, PronSc
     return user_text, ai_reply, pron_score, corrections
 
 
+def _handle_asr_partial(websocket: WebSocket, session_id: str, turn_id: str, text: str):
+    return websocket.send_json(
+        {
+            "type": "asr.partial",
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "text": text,
+            "server_ts": 0,
+        }
+    )
+
+
 @router.websocket("/ws/session/{session_id}")
 async def session_ws(websocket: WebSocket, session_id: str) -> None:
     await websocket.accept()
@@ -67,15 +81,92 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
             payload = json.loads(raw)
             msg_type = payload.get("type")
 
-            if msg_type == "session_start":
+            if msg_type in {"session_start", "session.start"}:
                 start_session(
                     session_id=session_id,
                     scene_id=payload.get("scene_id", "interview"),
                     difficulty=payload.get("difficulty", 1),
                     persona_id=payload.get("persona_id", "strict_interviewer"),
                 )
-            elif msg_type == "audio_chunk":
+                if msg_type == "session.start":
+                    await websocket.send_json(
+                        {
+                            "type": "session.ready",
+                            "session_id": session_id,
+                            "server_ts": payload.get("client_ts", 0),
+                        }
+                    )
+            elif msg_type in {"audio_chunk", "audio.append"}:
+                session = get_session(session_id)
+                if session is None:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "code": "BAD_REQUEST",
+                            "message": "Session not started.",
+                        }
+                    )
+                    continue
+
+                if msg_type == "audio.append":
+                    previous_turn_id = session.current_turn_id
+                    turn_id = append_audio_chunk(
+                        session_id,
+                        payload.get("seq", 0),
+                        payload.get("chunk", ""),
+                        now_ms=payload.get("client_ts", 0),
+                    )
+                    session = get_session(session_id)
+                    if turn_id is None or session is None:
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "code": "BAD_REQUEST",
+                                "message": "Turn could not be started.",
+                            }
+                        )
+                        continue
+
+                    if previous_turn_id is None:
+                        await websocket.send_json(
+                            {
+                                "type": "turn.started",
+                                "session_id": session_id,
+                                "turn_id": turn_id,
+                                "server_ts": payload.get("client_ts", 0),
+                            }
+                        )
+                    if not payload.get("is_last", False):
+                        partial_text = build_partial_transcript(session.current_turn_audio_chunks)
+                        await _handle_asr_partial(websocket, session_id, turn_id, partial_text)
+                        continue
+
+                    finalized_turn = finalize_turn(session_id, now_ms=payload.get("client_ts", 0))
+                    if finalized_turn is None:
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "code": "BAD_REQUEST",
+                                "message": "No active turn to finalize.",
+                            }
+                        )
+                        continue
+
+                    final_text, duration_ms = transcribe_chunks(list(enumerate(finalized_turn.audio_chunks)))
+                    await websocket.send_json(
+                        {
+                            "type": "user_turn.final",
+                            "session_id": session_id,
+                            "turn_id": finalized_turn.turn_id,
+                            "text": final_text,
+                            "duration_ms": duration_ms,
+                            "server_ts": payload.get("client_ts", 0),
+                        }
+                    )
+                    continue
+
                 append_audio_chunk(session_id, payload.get("seq", 0), payload.get("data", ""))
+
             elif msg_type == "audio_end":
                 session = get_session(session_id)
                 if session is None:
@@ -135,7 +226,7 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                     )
                 )
                 await websocket.send_json({"type": "turn_end", "turn_id": turn_id})
-            elif msg_type == "session_end":
+            elif msg_type in {"session_end", "session.finish"}:
                 break
             else:
                 await websocket.send_json(

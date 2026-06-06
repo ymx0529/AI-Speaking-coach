@@ -39,10 +39,12 @@ async function start(sceneId: string) {
   try {
     await ws.connect(sessionId)
     ws.send({
-      type: 'session_start',
+      type: 'session.start',
+      session_id: sessionId,
       scene_id: sceneId,
       difficulty: 1,
       persona_id: personaId,
+      client_ts: Date.now(),
     })
   } catch (error) {
     console.error('Failed to connect websocket', error)
