@@ -1,7 +1,8 @@
 import { ref } from 'vue'
+import axios from 'axios'
 
 import { useAppStore } from '@/core/store'
-import type { ServerMsg } from '@/core/types'
+import type { ServerMsg, SessionStatusResponse } from '@/core/types'
 import { ws } from '@/core/ws'
 
 const SCENE_SAMPLES: Record<string, [string, string]> = {
@@ -106,9 +107,39 @@ export function useConversation() {
     }, 250)
   }
 
+  async function finishCurrentSession() {
+    if (!store.sessionId) {
+      errorMessage.value = '当前没有可结束的会话。'
+      return
+    }
+
+    if (ws.isConnected()) {
+      ws.send({
+        type: 'session.finish',
+        session_id: store.sessionId,
+      })
+    }
+
+    try {
+      const response = await axios.get<SessionStatusResponse>(
+        `http://localhost:8000/api/sessions/${store.sessionId}/status`
+      )
+      if (response.data.state !== 'finished') {
+        errorMessage.value = '会话结束状态未同步完成，请稍后再试。'
+        return
+      }
+    } catch {
+      errorMessage.value = '结束会话失败，无法确认当前状态。'
+      return
+    }
+
+    store.endSession()
+  }
+
   return {
     errorMessage,
     handleServerMessage,
+    finishCurrentSession,
     runMockTurn,
   }
 }

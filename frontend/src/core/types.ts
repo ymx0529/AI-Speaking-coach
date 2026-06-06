@@ -60,6 +60,14 @@ export interface SessionSummaryResponse {
   turns: TurnRecord[]
 }
 
+export interface SessionStatusResponse {
+  session_id: string
+  state: 'active' | 'finished'
+  summary_ready: boolean
+  last_turn_id: string | null
+  last_error: string | null
+}
+
 // ── Client → Server ──────────────────────────────────────────
 
 export interface SessionStartMessage {

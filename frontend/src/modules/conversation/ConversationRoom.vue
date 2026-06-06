@@ -68,11 +68,11 @@ import PronScoreBar from './PronScoreBar.vue'
 import { useConversation } from './useConversation'
 
 const store = useAppStore()
-const { errorMessage, handleServerMessage, runMockTurn } = useConversation()
+const { errorMessage, finishCurrentSession, handleServerMessage, runMockTurn } = useConversation()
 let unsubscribe: (() => void) | null = null
 
-function finishSession() {
-  store.endSession()
+async function finishSession() {
+  await finishCurrentSession()
 }
 
 onMounted(() => {
