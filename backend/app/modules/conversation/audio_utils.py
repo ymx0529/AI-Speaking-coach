@@ -3,8 +3,17 @@ from __future__ import annotations
 import base64
 import binascii
 from io import BytesIO
+import os
 
 from pydub import AudioSegment
+
+from app.core.config import settings
+
+if settings.ffmpeg_binary:
+    AudioSegment.converter = settings.ffmpeg_binary
+    ffprobe_candidate = settings.ffmpeg_binary.replace("ffmpeg.exe", "ffprobe.exe")
+    if os.path.exists(ffprobe_candidate):
+        AudioSegment.ffprobe = ffprobe_candidate
 
 
 def decode_base64_chunk(data: str) -> bytes:
@@ -50,6 +59,20 @@ def convert_audio_bytes_to_wav_bytes(audio_bytes: bytes, *, source_format: str =
 def convert_audio_bytes_to_pcm16_bytes(audio_bytes: bytes, *, source_format: str = "webm") -> bytes:
     normalized = _normalize_audio_segment(audio_bytes, source_format=source_format)
     return normalized.raw_data
+
+
+def convert_audio_chunks_to_wav_bytes(chunks: list[tuple[int, str]], *, source_format: str = "webm") -> bytes:
+    combined: AudioSegment | None = None
+    for _, chunk in sorted(chunks, key=lambda item: item[0]):
+        segment = _normalize_audio_segment(decode_base64_chunk(chunk), source_format=source_format)
+        combined = segment if combined is None else combined + segment
+
+    if combined is None:
+        return b""
+
+    output = BytesIO()
+    combined.export(output, format="wav")
+    return output.getvalue()
 
 
 def convert_audio_chunks_to_pcm16_bytes(chunks: list[tuple[int, str]], *, source_format: str = "webm") -> bytes:

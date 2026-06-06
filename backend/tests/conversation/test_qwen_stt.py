@@ -1,71 +1,78 @@
 from __future__ import annotations
 
 from pathlib import Path
-import json
 import sys
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from app.modules.conversation.qwen_stt import _qwen_transcribe_pcm16, transcribe_chunks
+from app.modules.conversation.qwen_stt import (
+    _qwen_transcribe_wav_bytes,
+    _wav_bytes_to_data_uri,
+    transcribe_chunks,
+)
 
 
-class FakeWebSocket:
-    def __init__(self, responses: list[dict]):
-        self._responses = [json.dumps(item) for item in responses]
-        self.sent_messages: list[dict] = []
-        self.closed = False
-
-    def send(self, payload: str) -> None:
-        self.sent_messages.append(json.loads(payload))
-
-    def recv(self) -> str:
-        if not self._responses:
-            raise AssertionError("No more fake websocket responses configured.")
-        return self._responses.pop(0)
-
-    def close(self) -> None:
-        self.closed = True
+class _FakeMessage:
+    def __init__(self, content: str):
+        self.content = content
 
 
-def test_qwen_transcribe_pcm16_sends_manual_mode_events(monkeypatch):
-    fake_socket = FakeWebSocket(
-        [
-            {"type": "session.created"},
-            {"type": "session.updated"},
-            {"type": "input_audio_buffer.committed"},
-            {
-                "type": "conversation.item.input_audio_transcription.text",
-                "text": "hello wor",
-            },
-            {
-                "type": "conversation.item.input_audio_transcription.completed",
-                "transcript": "hello world",
-            },
-            {"type": "session.finished"},
-        ]
-    )
-    monkeypatch.setattr("app.modules.conversation.qwen_stt.settings.dashscope_api_key", "fake-key")
-    monkeypatch.setattr("app.modules.conversation.qwen_stt.websocket.create_connection", lambda *args, **kwargs: fake_socket)
+class _FakeChoice:
+    def __init__(self, content: str):
+        self.message = _FakeMessage(content)
 
-    transcript = _qwen_transcribe_pcm16(b"\x01\x02" * 1600, language="en")
+
+class _FakeCompletion:
+    def __init__(self, content: str):
+        self.choices = [_FakeChoice(content)]
+
+
+class _FakeChatCompletions:
+    def __init__(self, content: str):
+        self._content = content
+        self.last_kwargs: dict | None = None
+
+    def create(self, **kwargs):
+        self.last_kwargs = kwargs
+        return _FakeCompletion(self._content)
+
+
+class _FakeClient:
+    def __init__(self, content: str):
+        self.chat = type("ChatNamespace", (), {"completions": _FakeChatCompletions(content)})()
+
+
+def test_wav_bytes_to_data_uri_prefix():
+    data_uri = _wav_bytes_to_data_uri(b"RIFFmock")
+
+    assert data_uri.startswith("data:audio/wav;base64,")
+
+
+def test_qwen_transcribe_wav_bytes_uses_openai_compatible_payload(monkeypatch):
+    fake_client = _FakeClient("hello world")
+    monkeypatch.setattr("app.modules.conversation.qwen_stt._get_client", lambda: fake_client)
+
+    transcript = _qwen_transcribe_wav_bytes(b"RIFFmock", language="en")
 
     assert transcript == "hello world"
-    assert fake_socket.closed is True
-    assert [item["type"] for item in fake_socket.sent_messages] == [
-        "session.update",
-        "input_audio_buffer.append",
-        "input_audio_buffer.commit",
-        "session.finish",
-    ]
-    assert fake_socket.sent_messages[0]["session"]["turn_detection"] is None
-    assert fake_socket.sent_messages[0]["session"]["input_audio_transcription"]["language"] == "en"
+    payload = fake_client.chat.completions.last_kwargs
+    assert payload is not None
+    assert payload["model"] == "qwen3-asr-flash"
+    assert payload["messages"][0]["content"][0]["type"] == "input_audio"
+    assert payload["extra_body"]["asr_options"]["language"] == "en"
 
 
 def test_transcribe_chunks_uses_qwen_for_binary_audio(monkeypatch):
-    monkeypatch.setattr("app.modules.conversation.qwen_stt.convert_audio_chunks_to_pcm16_bytes", lambda chunks, source_format="webm": b"\x00\x01" * 800)
-    monkeypatch.setattr("app.modules.conversation.qwen_stt._qwen_transcribe_pcm16", lambda pcm_bytes, language=None: "recognized by qwen")
+    monkeypatch.setattr(
+        "app.modules.conversation.qwen_stt.convert_audio_bytes_to_wav_bytes",
+        lambda audio_bytes, source_format="webm": b"RIFFmock",
+    )
+    monkeypatch.setattr(
+        "app.modules.conversation.qwen_stt._qwen_transcribe_wav_bytes",
+        lambda wav_bytes, language=None: "recognized by qwen",
+    )
 
     text, duration_ms = transcribe_chunks([(0, "AAECAwQF")], source_format="webm")
 
@@ -85,19 +92,9 @@ def test_transcribe_chunks_keeps_mock_text_shortcut():
     assert duration_ms > 0
 
 
-def test_qwen_transcribe_pcm16_raises_on_transcription_failure(monkeypatch):
-    fake_socket = FakeWebSocket(
-        [
-            {"type": "session.created"},
-            {"type": "session.updated"},
-            {
-                "type": "conversation.item.input_audio_transcription.failed",
-                "error": {"message": "bad audio"},
-            },
-        ]
-    )
-    monkeypatch.setattr("app.modules.conversation.qwen_stt.settings.dashscope_api_key", "fake-key")
-    monkeypatch.setattr("app.modules.conversation.qwen_stt.websocket.create_connection", lambda *args, **kwargs: fake_socket)
+def test_qwen_transcribe_wav_bytes_raises_on_empty_transcript(monkeypatch):
+    fake_client = _FakeClient("")
+    monkeypatch.setattr("app.modules.conversation.qwen_stt._get_client", lambda: fake_client)
 
-    with pytest.raises(RuntimeError, match="bad audio"):
-        _qwen_transcribe_pcm16(b"\x01\x02" * 1600, language="en")
+    with pytest.raises(RuntimeError, match="Qwen ASR returned no transcript"):
+        _qwen_transcribe_wav_bytes(b"RIFFmock", language="en")

@@ -10,9 +10,8 @@ dependencies = [
     "python-dotenv>=1.0",
     "python-multipart>=0.0.9",
     "azure-cognitiveservices-speech>=1.38",
-    "openai>=1.30",
+    "openai>=1.52.0",
     "pydub>=0.25",
-    "websocket-client>=1.8",
 ]
 
 [project.optional-dependencies]

@@ -30,20 +30,96 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return btoa(binary)
 }
 
+function getAudioContextCtor(): typeof AudioContext | null {
+  if (typeof window === 'undefined') return null
+  return window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext ?? null
+}
+
+function mergeFloat32Chunks(chunks: Float32Array[]): Float32Array {
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+  const merged = new Float32Array(totalLength)
+  let offset = 0
+  chunks.forEach((chunk) => {
+    merged.set(chunk, offset)
+    offset += chunk.length
+  })
+  return merged
+}
+
+function encodeWav(samples: Float32Array, sampleRate: number): Blob {
+  const buffer = new ArrayBuffer(44 + samples.length * 2)
+  const view = new DataView(buffer)
+
+  function writeString(offset: number, value: string) {
+    for (let index = 0; index < value.length; index += 1) {
+      view.setUint8(offset + index, value.charCodeAt(index))
+    }
+  }
+
+  writeString(0, 'RIFF')
+  view.setUint32(4, 36 + samples.length * 2, true)
+  writeString(8, 'WAVE')
+  writeString(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  writeString(36, 'data')
+  view.setUint32(40, samples.length * 2, true)
+
+  let offset = 44
+  for (let index = 0; index < samples.length; index += 1) {
+    const clamped = Math.max(-1, Math.min(1, samples[index]))
+    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true)
+    offset += 2
+  }
+
+  return new Blob([buffer], { type: 'audio/wav' })
+}
+
 export function useConversation() {
   const store = useAppStore()
   const errorMessage = ref('')
-  const recordingSupported = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined'
-  let mediaRecorder: MediaRecorder | null = null
+  const debugInfo = ref({
+    audioContextState: 'idle',
+    chunkCount: 0,
+    sampleRate: 0,
+    capturedSamples: 0,
+    peakLevel: 0,
+    sentBytes: 0,
+    lastEncoding: '',
+  })
+  const recordingSupported =
+    typeof navigator !== 'undefined' &&
+    !!navigator.mediaDevices?.getUserMedia &&
+    !!getAudioContextCtor()
+
   let mediaStream: MediaStream | null = null
-  let chunkSeq = 0
-  let stopRequested = false
+  let audioContext: AudioContext | null = null
+  let sourceNode: MediaStreamAudioSourceNode | null = null
+  let processorNode: ScriptProcessorNode | null = null
+  let muteNode: GainNode | null = null
+  let recordedChunks: Float32Array[] = []
+  let recordedSampleRate = 16000
 
   function cleanupMediaStream() {
-    mediaRecorder = null
+    processorNode?.disconnect()
+    sourceNode?.disconnect()
+    muteNode?.disconnect()
+    if (audioContext) {
+      void audioContext.close()
+    }
+    processorNode = null
+    sourceNode = null
+    muteNode = null
+    audioContext = null
     mediaStream?.getTracks().forEach((track) => track.stop())
     mediaStream = null
     store.isRecording = false
+    recordedChunks = []
   }
 
   function playAssistantAudio(data: string, format?: string) {
@@ -141,56 +217,93 @@ export function useConversation() {
     }
 
     errorMessage.value = ''
+    debugInfo.value = {
+      audioContextState: 'initializing',
+      chunkCount: 0,
+      sampleRate: 0,
+      capturedSamples: 0,
+      peakLevel: 0,
+      sentBytes: 0,
+      lastEncoding: '',
+    }
     store.resetTurn()
-    chunkSeq = 0
-    stopRequested = false
+    recordedChunks = []
 
     try {
+      const AudioContextCtor = getAudioContextCtor()
+      if (!AudioContextCtor) {
+        errorMessage.value = '当前浏览器不支持 PCM 录音，请使用模拟模式。'
+        return
+      }
+
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : 'audio/webm'
-      mediaRecorder = new MediaRecorder(mediaStream, { mimeType })
+      audioContext = new AudioContextCtor()
+      await audioContext.resume()
+      recordedSampleRate = audioContext.sampleRate
+      sourceNode = audioContext.createMediaStreamSource(mediaStream)
+      processorNode = audioContext.createScriptProcessor(4096, 1, 1)
+      muteNode = audioContext.createGain()
+      muteNode.gain.value = 0
       store.isRecording = true
+      debugInfo.value.audioContextState = audioContext.state
+      debugInfo.value.sampleRate = recordedSampleRate
 
-      mediaRecorder.ondataavailable = async (event: BlobEvent) => {
-        if (!event.data || event.data.size === 0 || !store.sessionId) return
-        const chunk = await blobToBase64(event.data)
-        const isLast = stopRequested
-        ws.send({
-          type: 'audio.append',
-          session_id: store.sessionId,
-          turn_id: store.currentTurnId,
-          seq: chunkSeq++,
-          encoding: 'webm_opus',
-          chunk,
-          is_last: isLast,
-          client_ts: Date.now(),
-        })
-        if (isLast) {
-          stopRequested = false
-          cleanupMediaStream()
+      processorNode.onaudioprocess = (event: AudioProcessingEvent) => {
+        const inputData = event.inputBuffer.getChannelData(0)
+        recordedChunks.push(new Float32Array(inputData))
+        let peak = 0
+        for (let index = 0; index < inputData.length; index += 1) {
+          const value = Math.abs(inputData[index])
+          if (value > peak) peak = value
         }
+        debugInfo.value.chunkCount += 1
+        debugInfo.value.capturedSamples += inputData.length
+        debugInfo.value.peakLevel = Math.max(debugInfo.value.peakLevel, peak)
       }
 
-      mediaRecorder.onerror = () => {
-        errorMessage.value = '录音过程中发生错误，请重试。'
-        cleanupMediaStream()
-      }
-
-      mediaRecorder.start(400)
+      sourceNode.connect(processorNode)
+      processorNode.connect(muteNode)
+      muteNode.connect(audioContext.destination)
     } catch {
       errorMessage.value = '无法访问麦克风，请检查浏览器权限设置。'
+      debugInfo.value.audioContextState = 'failed'
       cleanupMediaStream()
     }
   }
 
-  function stopRecording() {
-    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+  async function stopRecording() {
+    if (!store.isRecording) {
       return
     }
-    stopRequested = true
-    mediaRecorder.stop()
+
+    if (!store.sessionId || recordedChunks.length === 0) {
+      errorMessage.value = '前端没有采集到音频数据，请检查麦克风权限、系统默认输入设备，或确认页面是否成功开始录音。'
+      cleanupMediaStream()
+      return
+    }
+
+    store.isRecording = false
+
+    try {
+      const wavBlob = encodeWav(mergeFloat32Chunks(recordedChunks), recordedSampleRate)
+      const chunk = await blobToBase64(wavBlob)
+      debugInfo.value.sentBytes = wavBlob.size
+      debugInfo.value.lastEncoding = 'wav_pcm16'
+      ws.send({
+        type: 'audio.append',
+        session_id: store.sessionId,
+        turn_id: null,
+        seq: 0,
+        encoding: 'wav_pcm16',
+        chunk,
+        is_last: true,
+        client_ts: Date.now(),
+      })
+    } catch {
+      errorMessage.value = '录音数据处理失败，请重试。'
+    } finally {
+      cleanupMediaStream()
+    }
   }
 
   async function finishCurrentSession() {
@@ -224,6 +337,7 @@ export function useConversation() {
 
   return {
     errorMessage,
+    debugInfo,
     recordingSupported,
     handleServerMessage,
     finishCurrentSession,

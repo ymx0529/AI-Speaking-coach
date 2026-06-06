@@ -79,6 +79,18 @@
                 >
                   使用模拟模式
                 </button>
+                <div class="w-full rounded-2xl bg-slate-50 p-4 text-left text-xs text-slate-500">
+                  <div class="font-semibold text-slate-700">录音调试信息</div>
+                  <div class="mt-2 grid gap-1 sm:grid-cols-2">
+                    <div>AudioContext: {{ debugInfo.audioContextState }}</div>
+                    <div>Sample Rate: {{ debugInfo.sampleRate || '--' }}</div>
+                    <div>Chunks: {{ debugInfo.chunkCount }}</div>
+                    <div>Samples: {{ debugInfo.capturedSamples }}</div>
+                    <div>Peak: {{ debugInfo.peakLevel.toFixed(4) }}</div>
+                    <div>Sent Bytes: {{ debugInfo.sentBytes || '--' }}</div>
+                    <div class="sm:col-span-2">Encoding: {{ debugInfo.lastEncoding || '--' }}</div>
+                  </div>
+                </div>
                 <div v-if="errorMessage" class="rounded-full bg-rose-50 px-4 py-2 text-sm text-rose-700">
                   {{ errorMessage }}
                 </div>
@@ -109,7 +121,7 @@ import PronScoreBar from './PronScoreBar.vue'
 import { useConversation } from './useConversation'
 
 const store = useAppStore()
-const { errorMessage, finishCurrentSession, handleServerMessage, recordingSupported, runMockTurn, startRecording, stopRecording } =
+const { debugInfo, errorMessage, finishCurrentSession, handleServerMessage, recordingSupported, runMockTurn, startRecording, stopRecording } =
   useConversation()
 let unsubscribe: (() => void) | null = null
 
@@ -119,7 +131,7 @@ async function finishSession() {
 
 async function toggleRecording() {
   if (store.isRecording) {
-    stopRecording()
+    await stopRecording()
     return
   }
   await startRecording()

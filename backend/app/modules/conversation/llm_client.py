@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from openai import OpenAI
+
+from app.core.config import settings
 from app.core.scenes import SCENES
 
 
@@ -9,6 +12,17 @@ def _get_scene(scene_id: str, persona_id: str) -> tuple[dict, dict]:
     return scene, persona
 
 
+def _get_client() -> OpenAI:
+    if not settings.dashscope_api_key:
+        raise RuntimeError("DashScope API key is missing.")
+
+    return OpenAI(
+        api_key=settings.dashscope_api_key,
+        base_url=settings.dashscope_base_url,
+        timeout=settings.qwen_request_timeout_sec,
+    )
+
+
 def build_reply_prompt(
     *,
     scene_id: str,
@@ -16,17 +30,30 @@ def build_reply_prompt(
     difficulty: int,
     history: list[dict[str, str]],
     user_text: str,
-) -> str:
+) -> dict[str, object]:
     scene, persona = _get_scene(scene_id, persona_id)
+    system_prompt = persona["system_prompt"].format(difficulty=difficulty)
     recent_history = history[-6:]
-    history_text = " | ".join(f'{item["role"]}: {item["content"]}' for item in recent_history) or "No prior history."
-    return (
-        f'Scene: {scene["name"]}. '
-        f'Persona: {persona["system_prompt"]}. '
-        f'Difficulty: {difficulty}. '
-        f'History: {history_text}. '
-        f'Learner said: {user_text}'
-    )
+
+    messages: list[dict[str, str]] = [
+        {
+            "role": "system",
+            "content": (
+                f"{system_prompt}\n"
+                f"Current scene: {scene['name']}.\n"
+                f"If the learner is too brief, ask a short follow-up question.\n"
+                f"Do not explain that you are an AI.\n"
+                f"Keep the conversation natural and scenario-consistent."
+            ),
+        }
+    ]
+    messages.extend(recent_history)
+    messages.append({"role": "user", "content": user_text})
+    return {
+        "scene_name": scene["name"],
+        "persona_name": persona["name"],
+        "messages": messages,
+    }
 
 
 def generate_reply(
@@ -37,7 +64,48 @@ def generate_reply(
     history: list[dict[str, str]],
     user_text: str,
 ) -> str:
-    scene, persona = _get_scene(scene_id, persona_id)
+    prompt = build_reply_prompt(
+        scene_id=scene_id,
+        persona_id=persona_id,
+        difficulty=difficulty,
+        history=history,
+        user_text=user_text,
+    )
+    try:
+        client = _get_client()
+        stream = client.chat.completions.create(
+            model=settings.qwen_chat_model,
+            messages=prompt["messages"],
+            extra_body={"enable_thinking": settings.qwen_enable_thinking},
+            stream=True,
+        )
+
+        parts: list[str] = []
+        for chunk in stream:
+            delta = chunk.choices[0].delta
+            content = getattr(delta, "content", None)
+            if content:
+                parts.append(content)
+
+        reply = "".join(parts).strip()
+        if reply:
+            return _normalize_reply(reply)
+    except Exception:
+        pass
+
+    return _fallback_reply(scene_id=scene_id, persona_id=persona_id, user_text=user_text)
+
+
+def _normalize_reply(reply: str) -> str:
+    normalized = " ".join(reply.split())
+    words = normalized.split()
+    if len(words) > 40:
+        normalized = " ".join(words[:40])
+    return normalized
+
+
+def _fallback_reply(*, scene_id: str, persona_id: str, user_text: str) -> str:
+    _scene, persona = _get_scene(scene_id, persona_id)
     persona_name = persona["name"]
     lowered = user_text.lower()
 
@@ -57,7 +125,4 @@ def generate_reply(
         else:
             reply = f"{persona_name}: That is useful. What outcome do you expect from this idea?"
 
-    words = reply.split()
-    if len(words) > 40:
-        reply = " ".join(words[:40])
-    return reply
+    return _normalize_reply(reply)
