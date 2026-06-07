@@ -95,6 +95,8 @@
               </div>
             </section>
 
+            <ShadowingPracticePanel :session-id="sessionId" :summary="summary" />
+
             <section class="grid gap-5 xl:grid-cols-2">
               <div class="rounded-[28px] bg-white px-6 py-6 shadow-sm">
                 <div class="text-sm font-semibold text-slate-900">重点发音</div>
@@ -249,6 +251,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useAppStore } from '@/core/store'
 import type { CorrectionIssue, TurnRecord, WordScore } from '@/core/types'
 import { ws } from '@/core/ws'
+import ShadowingPracticePanel from './ShadowingPracticePanel.vue'
 import { useCoach } from './useCoach'
 
 const props = defineProps<{ sessionId: string }>()
