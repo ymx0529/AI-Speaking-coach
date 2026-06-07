@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 import json
 import sys
 
@@ -99,6 +100,23 @@ def test_me_returns_current_user(monkeypatch, tmp_path):
 
     assert response.status_code == 200
     assert response.json()["email"] == "xin@example.com"
+
+
+def test_token_expires_after_one_day(monkeypatch, tmp_path):
+    client = _client(monkeypatch, tmp_path)
+    data = _register(client)
+    token = data["token"]
+    user_id = data["user"]["id"]
+    _session_user_id, expires_at = auth_service._sessions[token]
+
+    assert _session_user_id == user_id
+    assert timedelta(hours=23, minutes=59) < expires_at - datetime.now(timezone.utc) <= timedelta(days=1)
+
+    auth_service._sessions[token] = (user_id, datetime.now(timezone.utc) - timedelta(seconds=1))
+    response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 401
+    assert token not in auth_service._sessions
 
 
 def test_logout_invalidates_token(monkeypatch, tmp_path):

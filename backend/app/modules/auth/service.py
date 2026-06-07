@@ -5,7 +5,7 @@ import json
 import re
 import secrets
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -16,8 +16,9 @@ USERS_FILE = BACKEND_ROOT / "runtime" / "users.json"
 
 _PASSWORD_ITERATIONS = 120_000
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+SESSION_TTL = timedelta(days=1)
 _lock = threading.Lock()
-_sessions: dict[str, str] = {}
+_sessions: dict[str, tuple[str, datetime]] = {}
 
 
 def register_user(*, name: str | None, email: str | None, password: str | None) -> tuple[str, dict]:
@@ -65,8 +66,13 @@ def get_user_by_token(token: str | None) -> dict | None:
     if not token:
         return None
 
-    user_id = _sessions.get(token)
-    if user_id is None:
+    session = _sessions.get(token)
+    if session is None:
+        return None
+
+    user_id, expires_at = session
+    if expires_at <= datetime.now(timezone.utc):
+        _sessions.pop(token, None)
         return None
 
     with _lock:
@@ -86,7 +92,7 @@ def clear_sessions() -> None:
 
 def _issue_token(user_id: str) -> str:
     token = secrets.token_urlsafe(32)
-    _sessions[token] = user_id
+    _sessions[token] = (user_id, datetime.now(timezone.utc) + SESSION_TTL)
     return token
 
 
