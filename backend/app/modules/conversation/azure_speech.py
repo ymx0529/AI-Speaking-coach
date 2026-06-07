@@ -28,10 +28,10 @@ def split_reply_for_tts(text: str, max_chars: int = _MAX_TTS_SEGMENT_CHARS) -> l
     if not normalized:
         return []
 
-    segments: list[str] = []
+    sentence_segments: list[str] = []
     for sentence in _SENTENCE_BOUNDARY_RE.split(normalized):
-        segments.extend(_split_long_tts_segment(sentence, max_chars))
-    return [segment for segment in segments if segment]
+        sentence_segments.extend(_split_long_tts_segment(sentence, max_chars))
+    return _pack_tts_parts(sentence_segments, max_chars)
 
 
 def _split_long_tts_segment(segment: str, max_chars: int) -> list[str]:

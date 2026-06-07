@@ -12,11 +12,12 @@ from app.modules.conversation import session_manager
 
 def setup_function() -> None:
     session_manager._sessions.clear()
-    auth_service.clear_sessions()
+    auth_service._sessions.clear()
 
 
 def _auth(monkeypatch, tmp_path, email: str = "status@example.com") -> tuple[dict[str, str], dict]:
     monkeypatch.setattr(auth_service, "USERS_FILE", tmp_path / "users.json")
+    monkeypatch.setattr(auth_service, "SESSIONS_FILE", tmp_path / "sessions.json")
     token, user = auth_service.register_user(name="Status User", email=email, password="secret1")
     return {"Authorization": f"Bearer {token}"}, user
 

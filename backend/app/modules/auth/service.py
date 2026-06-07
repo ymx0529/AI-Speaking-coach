@@ -13,6 +13,7 @@ from fastapi import HTTPException
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 USERS_FILE = BACKEND_ROOT / "runtime" / "users.json"
+SESSIONS_FILE = BACKEND_ROOT / "runtime" / "sessions.json"
 
 _PASSWORD_ITERATIONS = 120_000
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -66,16 +67,18 @@ def get_user_by_token(token: str | None) -> dict | None:
     if not token:
         return None
 
-    session = _sessions.get(token)
-    if session is None:
-        return None
-
-    user_id, expires_at = session
-    if expires_at <= datetime.now(timezone.utc):
-        _sessions.pop(token, None)
-        return None
-
     with _lock:
+        _load_sessions()
+        session = _sessions.get(token)
+        if session is None:
+            return None
+
+        user_id, expires_at = session
+        if expires_at <= datetime.now(timezone.utc):
+            _sessions.pop(token, None)
+            _write_sessions(_sessions)
+            return None
+
         for user in _read_users():
             if user.get("id") == user_id:
                 return _public_user(user)
@@ -83,17 +86,79 @@ def get_user_by_token(token: str | None) -> dict | None:
 
 
 def logout_token(token: str) -> None:
-    _sessions.pop(token, None)
+    with _lock:
+        _load_sessions()
+        _sessions.pop(token, None)
+        _write_sessions(_sessions)
 
 
 def clear_sessions() -> None:
-    _sessions.clear()
+    with _lock:
+        _sessions.clear()
+        if SESSIONS_FILE.exists():
+            SESSIONS_FILE.unlink()
 
 
 def _issue_token(user_id: str) -> str:
     token = secrets.token_urlsafe(32)
-    _sessions[token] = (user_id, datetime.now(timezone.utc) + SESSION_TTL)
+    with _lock:
+        _load_sessions()
+        _sessions[token] = (user_id, datetime.now(timezone.utc) + SESSION_TTL)
+        _write_sessions(_sessions)
     return token
+
+
+def _load_sessions() -> None:
+    if _sessions or not SESSIONS_FILE.exists():
+        return
+
+    try:
+        with SESSIONS_FILE.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+    except (OSError, json.JSONDecodeError):
+        return
+
+    if not isinstance(data, dict):
+        return
+
+    now = datetime.now(timezone.utc)
+    changed = False
+    for token, item in data.items():
+        if not isinstance(token, str) or not isinstance(item, dict):
+            changed = True
+            continue
+        user_id = item.get("user_id")
+        expires_at_raw = item.get("expires_at")
+        if not isinstance(user_id, str) or not isinstance(expires_at_raw, str):
+            changed = True
+            continue
+        try:
+            expires_at = datetime.fromisoformat(expires_at_raw)
+        except ValueError:
+            changed = True
+            continue
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at <= now:
+            changed = True
+            continue
+        _sessions[token] = (user_id, expires_at)
+
+    if changed:
+        _write_sessions(_sessions)
+
+
+def _write_sessions(sessions: dict[str, tuple[str, datetime]]) -> None:
+    SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        token: {
+            "user_id": user_id,
+            "expires_at": expires_at.isoformat(),
+        }
+        for token, (user_id, expires_at) in sessions.items()
+    }
+    with SESSIONS_FILE.open("w", encoding="utf-8") as file:
+        json.dump(data, file, ensure_ascii=False, indent=2)
 
 
 def _read_users() -> list[dict]:

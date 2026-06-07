@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 pytestmark = pytest.mark.anyio
@@ -64,3 +66,28 @@ async def test_replay_same_turn_id_is_idempotent():
 async def test_unknown_event_type_is_ignored():
     await on_turn_event({"type": "garbage"})
     assert coach_store.get_session_turns("unknown") == []
+
+
+async def test_correction_push_does_not_wait_for_slow_pronunciation(monkeypatch):
+    order: list[str] = []
+
+    async def slow_assess(**_kwargs):
+        await asyncio.sleep(0.05)
+        order.append("pronunciation_done")
+        return PronScore(overall=80, accuracy=78, fluency=82, completeness=90)
+
+    async def fast_analyse(**_kwargs):
+        order.append("correction_done")
+        return [], 90.0, 91.0, 92.0, "I want pasta."
+
+    async def fake_send(_session_id: str, message: dict):
+        order.append(message["type"])
+
+    monkeypatch.setattr("app.modules.coach.turn_handler.pronunciation_service.assess", slow_assess)
+    monkeypatch.setattr("app.modules.coach.turn_handler.correction_service.analyse", fast_analyse)
+    monkeypatch.setattr("app.modules.coach.turn_handler.ws_hub.send", fake_send)
+
+    await on_turn_event(_transcript_event(audio_b64="audio"))
+
+    assert order[:2] == ["correction_done", "analysis.correction"]
+    assert order[-2:] == ["pronunciation_done", "analysis.pronunciation"]

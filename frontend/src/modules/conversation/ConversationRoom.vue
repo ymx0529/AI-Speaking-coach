@@ -1,17 +1,17 @@
 <template>
-  <section class="min-h-screen px-4 py-4 lg:px-6 lg:py-6">
+  <section class="h-screen overflow-hidden px-4 py-4 lg:px-6 lg:py-6">
     <div
-      class="relative min-h-[calc(100vh-2rem)] overflow-hidden rounded-[24px] border border-[color:var(--line-soft)] bg-[var(--surface-0)] shadow-[0_28px_80px_rgba(15,23,42,0.08)]"
+      class="relative h-[calc(100vh-2rem)] overflow-hidden rounded-[24px] border border-[color:var(--line-soft)] bg-[var(--surface-0)] shadow-[0_28px_80px_rgba(15,23,42,0.08)] lg:h-[calc(100vh-3rem)]"
     >
       <div
         class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_28%),radial-gradient(circle_at_top_right,rgba(34,197,94,0.08),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0.6),rgba(248,250,252,0.86))]"
       />
 
       <div
-        class="relative grid min-h-[calc(100vh-2rem)] gap-0 xl:grid-cols-[minmax(0,1fr)_24rem] 2xl:grid-cols-[minmax(0,1fr)_26rem]"
+        class="relative grid h-full grid-rows-[minmax(0,1fr)_auto] gap-0 overflow-y-auto xl:grid-cols-[minmax(0,1fr)_24rem] xl:grid-rows-none xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_26rem]"
       >
-        <div class="flex min-h-0 flex-col xl:border-r xl:border-[color:var(--line-soft)]">
-          <header class="border-b border-[color:var(--line-soft)] px-6 py-5 lg:px-8">
+        <div class="flex h-full min-h-0 flex-col xl:border-r xl:border-[color:var(--line-soft)]">
+          <header class="shrink-0 border-b border-[color:var(--line-soft)] px-6 py-5 lg:px-8">
             <div class="flex flex-wrap items-start justify-between gap-5">
               <div class="max-w-3xl">
                 <div class="text-xs uppercase tracking-[0.22em] text-[var(--ink-4)]">Immersive Speaking Workspace</div>
@@ -54,8 +54,8 @@
             </div>
           </header>
 
-          <div class="flex min-h-0 flex-1 flex-col">
-            <div class="border-b border-[color:var(--line-soft)] px-6 py-4 lg:px-8">
+          <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div class="shrink-0 border-b border-[color:var(--line-soft)] px-6 py-4 lg:px-8">
               <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div class="text-base font-semibold text-[var(--ink-2)]">实时对话区</div>
@@ -69,11 +69,11 @@
               </div>
             </div>
 
-            <div class="min-h-0 flex-1 px-4 py-4 lg:px-6 lg:py-5">
+            <div class="min-h-0 flex-1 overflow-hidden px-4 py-4 lg:px-6 lg:py-5">
               <div
                 ref="conversationScrollRef"
                 aria-label="对话消息记录"
-                class="flex h-full min-h-[24rem] flex-col gap-5 overflow-y-auto px-1 pb-2 pr-3 pt-1"
+                class="flex h-full min-h-0 flex-col gap-5 overflow-y-auto px-1 pb-2 pr-3 pt-1"
               >
                 <template v-if="conversationMessages.length">
                   <div
@@ -128,7 +128,7 @@
               </div>
             </div>
 
-            <div class="border-t border-[color:var(--line-soft)] px-4 pb-4 pt-3 lg:px-6 lg:pb-6">
+            <div class="shrink-0 border-t border-[color:var(--line-soft)] px-4 pb-4 pt-3 lg:px-6 lg:pb-6">
               <div
                 class="grid gap-4 rounded-[18px] bg-[linear-gradient(145deg,#0f172a_0%,#1d4ed8_58%,#38bdf8_100%)] p-5 text-white shadow-[0_24px_60px_rgba(29,78,216,0.18)] lg:grid-cols-[minmax(0,1fr)_18rem]"
               >
@@ -190,7 +190,7 @@
           </div>
         </div>
 
-        <aside class="border-t border-[color:var(--line-soft)] bg-[var(--surface-2)]/60 p-3 xl:border-l xl:border-t-0 xl:p-4">
+        <aside class="border-t border-[color:var(--line-soft)] bg-[var(--surface-2)]/60 p-3 xl:h-full xl:overflow-y-auto xl:border-l xl:border-t-0 xl:p-4">
           <div class="sticky top-4 overflow-hidden rounded-[20px] border border-[color:var(--line-soft)] bg-[var(--surface-1)] shadow-[var(--shadow-soft)]">
             <div class="border-b border-[color:var(--line-soft)] px-5 py-5">
               <div class="text-sm font-semibold text-[var(--ink-2)]">分析侧边栏</div>

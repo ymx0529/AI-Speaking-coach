@@ -13,6 +13,7 @@ from starlette.websockets import WebSocketDisconnect
 from app.core import event_bus
 from app.main import app
 from app.modules.auth import service as auth_service
+from app.modules.coach import store as coach_store
 from app.modules.conversation import session_manager
 
 
@@ -22,7 +23,8 @@ def _b64(text: str) -> str:
 
 def setup_function() -> None:
     session_manager._sessions.clear()
-    auth_service.clear_sessions()
+    auth_service._sessions.clear()
+    coach_store._store.clear()
 
 
 def _receive_until(websocket, msg_type: str, *, max_messages: int = 8) -> dict:
@@ -35,6 +37,7 @@ def _receive_until(websocket, msg_type: str, *, max_messages: int = 8) -> dict:
 
 def _auth_query(monkeypatch, tmp_path, email: str = "realtime@example.com") -> str:
     monkeypatch.setattr(auth_service, "USERS_FILE", tmp_path / "users.json")
+    monkeypatch.setattr(auth_service, "SESSIONS_FILE", tmp_path / "sessions.json")
     token, _user = auth_service.register_user(name="Realtime User", email=email, password="secret1")
     return f"?token={token}"
 
@@ -173,9 +176,12 @@ def test_audio_append_publishes_turn_transcript_ready_event_once(monkeypatch, tm
     assert event.difficulty == 2
     assert event.persona_id == "colleague"
     assert event.transcript == "I think we should launch next month."
-    assert event.assistant_reply_text
+    assert event.assistant_reply_text == ""
     assert event.audio_b64
     assert event.turn_duration_ms > 0
+    record = coach_store.get_turn("realtime-2", event.turn_id)
+    assert record is not None
+    assert record.assistant_reply_text
 
 
 def test_session_start_keeps_custom_background_for_reply_generation(monkeypatch, tmp_path):
@@ -240,7 +246,11 @@ def test_audio_append_publishes_analysis_before_tts(monkeypatch, tmp_path):
         return _b64("audio"), "wav_pcm16"
 
     monkeypatch.setattr(event_bus, "publish", fake_publish)
-    monkeypatch.setattr("app.modules.conversation.router.generate_reply", lambda **_kwargs: "One reply.")
+    def fake_generate_reply(**_kwargs):
+        order.append("llm")
+        return "One reply."
+
+    monkeypatch.setattr("app.modules.conversation.router.generate_reply", fake_generate_reply)
     monkeypatch.setattr("app.modules.conversation.router.synthesize_reply_audio", fake_synthesize)
     client = TestClient(app)
 
@@ -271,7 +281,7 @@ def test_audio_append_publishes_analysis_before_tts(monkeypatch, tmp_path):
         )
         _receive_until(websocket, "assistant.reply_audio_chunk")
 
-    assert order == ["publish", "tts"]
+    assert order == ["publish", "llm", "tts"]
 
 
 def test_audio_append_does_not_wait_for_slow_tts(monkeypatch, tmp_path):
@@ -402,9 +412,11 @@ def test_audio_append_uses_previous_turn_history(monkeypatch, tmp_path):
 def test_audio_append_streams_reply_audio_by_segments(monkeypatch, tmp_path):
     auth_query = _auth_query(monkeypatch, tmp_path)
     synthesized_segments: list[str] = []
+    first_segment = "First short answer with enough detail to stay under the segment boundary."
+    second_segment = "Second follow-up question that should become the next generated audio segment because the full reply is long."
 
     def fake_generate_reply(**_kwargs):
-        return "First short answer. Second follow-up question?"
+        return f"{first_segment} {second_segment}"
 
     def fake_synthesize(text: str):
         synthesized_segments.append(text)
@@ -447,8 +459,8 @@ def test_audio_append_streams_reply_audio_by_segments(monkeypatch, tmp_path):
 
     assert start_msg["total_chunks"] == 2
     assert first_chunk["sequence"] == 0
-    assert first_chunk["text"] == "First short answer."
+    assert first_chunk["text"] == first_segment
     assert second_chunk["sequence"] == 1
-    assert second_chunk["text"] == "Second follow-up question?"
+    assert second_chunk["text"] == second_segment
     assert end_msg["total_chunks"] == 2
-    assert synthesized_segments == ["First short answer.", "Second follow-up question?"]
+    assert synthesized_segments == [first_segment, second_segment]

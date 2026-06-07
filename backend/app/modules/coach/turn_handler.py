@@ -35,49 +35,43 @@ def _to_transcript_event(event: object) -> TurnTranscriptReadyEvent | None:
     return None
 
 
-async def on_turn_event(event: object) -> None:
-    transcript_event = _to_transcript_event(event)
-    if transcript_event is None:
-        logger.warning("on_turn_event: unrecognised event type %s, skipping", type(event).__name__)
+async def _run_pronunciation_analysis(
+    transcript_event: TurnTranscriptReadyEvent,
+    record: coach_store.TurnAnalysisRecord,
+) -> None:
+    pron_score = await pronunciation_service.assess(
+        transcript=transcript_event.transcript,
+        wav_audio_b64=transcript_event.audio_b64,
+    )
+    if pron_score is None:
         return
 
-    logger.info("on_turn_event: session=%s turn=%s", transcript_event.session_id, transcript_event.turn_id)
-    record = coach_store.init_turn(transcript_event)
-
-    # Run pronunciation and correction in parallel
-    pron_score, (issues, grammar_score, expr_score, vocab_score, sample_answer) = await asyncio.gather(
-        pronunciation_service.assess(
-            transcript=transcript_event.transcript,
-            wav_audio_b64=transcript_event.audio_b64,
-        ),
-        correction_service.analyse(
-            transcript=transcript_event.transcript,
-            assistant_reply=transcript_event.assistant_reply_text,
+    record.pronunciation = pron_score
+    await ws_hub.send(
+        transcript_event.session_id,
+        pronunciation_service.build_ws_payload(
+            transcript_event.session_id,
+            transcript_event.turn_id,
+            pron_score,
         ),
     )
 
-    # Write results to store
-    if pron_score is not None:
-        record.pronunciation = pron_score
+
+async def _run_correction_analysis(
+    transcript_event: TurnTranscriptReadyEvent,
+    record: coach_store.TurnAnalysisRecord,
+) -> None:
+    issues, grammar_score, expr_score, vocab_score, sample_answer = await correction_service.analyse(
+        transcript=transcript_event.transcript,
+        assistant_reply=transcript_event.assistant_reply_text,
+    )
     record.corrections = issues
     record.grammar_score = grammar_score
     record.expression_score = expr_score
     record.vocabulary_score = vocab_score
     record.sample_answer = sample_answer
-    coach_store.set_status(transcript_event.session_id, transcript_event.turn_id, "analyzed")
 
-    # Push pronunciation result
-    if pron_score is not None:
-        await ws_hub.send(
-            transcript_event.session_id,
-            pronunciation_service.build_ws_payload(
-                transcript_event.session_id,
-                transcript_event.turn_id,
-                pron_score,
-            ),
-        )
-
-    # Push correction result (always push, even if issues list is empty)
+    # Push correction result as soon as it is ready, even if issues list is empty.
     await ws_hub.send(
         transcript_event.session_id,
         correction_service.build_ws_payload(
@@ -90,3 +84,19 @@ async def on_turn_event(event: object) -> None:
             sample_answer=sample_answer,
         ),
     )
+
+
+async def on_turn_event(event: object) -> None:
+    transcript_event = _to_transcript_event(event)
+    if transcript_event is None:
+        logger.warning("on_turn_event: unrecognised event type %s, skipping", type(event).__name__)
+        return
+
+    logger.info("on_turn_event: session=%s turn=%s", transcript_event.session_id, transcript_event.turn_id)
+    record = coach_store.init_turn(transcript_event)
+
+    await asyncio.gather(
+        _run_pronunciation_analysis(transcript_event, record),
+        _run_correction_analysis(transcript_event, record),
+    )
+    coach_store.set_status(transcript_event.session_id, transcript_event.turn_id, "analyzed")

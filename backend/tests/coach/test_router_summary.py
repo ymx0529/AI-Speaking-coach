@@ -27,14 +27,15 @@ def _event(session_id="sess-x", turn_id="turn-x", user_id="user-1"):
 @pytest.fixture(autouse=True)
 def clear_store():
     coach_store._store.clear()
-    auth_service.clear_sessions()
+    auth_service._sessions.clear()
     yield
     coach_store._store.clear()
-    auth_service.clear_sessions()
+    auth_service._sessions.clear()
 
 
 def _auth(monkeypatch, tmp_path, email: str = "summary@example.com") -> tuple[dict[str, str], dict]:
     monkeypatch.setattr(auth_service, "USERS_FILE", tmp_path / "users.json")
+    monkeypatch.setattr(auth_service, "SESSIONS_FILE", tmp_path / "sessions.json")
     token, user = auth_service.register_user(name="Summary User", email=email, password="secret1")
     return {"Authorization": f"Bearer {token}"}, user
 
