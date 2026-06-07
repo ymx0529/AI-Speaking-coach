@@ -3,11 +3,16 @@ from __future__ import annotations
 import io
 import json
 import math
+import re
 import urllib.request
 import wave
 from base64 import b64encode
 
 from app.core.config import settings
+
+_MAX_TTS_SEGMENT_CHARS = 120
+_SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?;:])\s+")
+_SOFT_BOUNDARY_RE = re.compile(r"(?<=[,])\s+")
 
 
 def synthesize_reply_audio(text: str) -> tuple[str, str]:
@@ -16,6 +21,53 @@ def synthesize_reply_audio(text: str) -> tuple[str, str]:
     except Exception:
         wav_bytes = _mock_beep_wav_bytes(text)
     return b64encode(wav_bytes).decode("utf-8"), "wav_pcm16"
+
+
+def split_reply_for_tts(text: str, max_chars: int = _MAX_TTS_SEGMENT_CHARS) -> list[str]:
+    normalized = " ".join(text.split())
+    if not normalized:
+        return []
+
+    segments: list[str] = []
+    for sentence in _SENTENCE_BOUNDARY_RE.split(normalized):
+        segments.extend(_split_long_tts_segment(sentence, max_chars))
+    return [segment for segment in segments if segment]
+
+
+def _split_long_tts_segment(segment: str, max_chars: int) -> list[str]:
+    segment = segment.strip()
+    if not segment:
+        return []
+    if len(segment) <= max_chars:
+        return [segment]
+
+    comma_parts = _SOFT_BOUNDARY_RE.split(segment)
+    if len(comma_parts) > 1:
+        return _pack_tts_parts(comma_parts, max_chars)
+    return _pack_tts_parts(segment.split(), max_chars)
+
+
+def _pack_tts_parts(parts: list[str], max_chars: int) -> list[str]:
+    chunks: list[str] = []
+    current = ""
+    for part in (item.strip() for item in parts if item.strip()):
+        candidate = f"{current} {part}".strip()
+        if len(candidate) <= max_chars:
+            current = candidate
+            continue
+
+        if current:
+            chunks.append(current)
+
+        if len(part) <= max_chars:
+            current = part
+        else:
+            chunks.extend(part[index : index + max_chars] for index in range(0, len(part), max_chars))
+            current = ""
+
+    if current:
+        chunks.append(current)
+    return chunks
 
 
 def _dashscope_synthesize_wav_bytes(text: str) -> bytes:

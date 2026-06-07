@@ -164,6 +164,30 @@ export interface AssistantReplyAudioMessage {
   data: string
 }
 
+export interface AssistantReplyAudioStartMessage {
+  type: 'assistant.reply_audio_start'
+  session_id: string
+  turn_id: string
+  total_chunks: number
+}
+
+export interface AssistantReplyAudioChunkMessage {
+  type: 'assistant.reply_audio_chunk'
+  session_id: string
+  turn_id: string
+  sequence: number
+  audio_format: AudioFormat
+  text: string
+  data: string
+}
+
+export interface AssistantReplyAudioEndMessage {
+  type: 'assistant.reply_audio_end'
+  session_id: string
+  turn_id: string
+  total_chunks: number
+}
+
 export interface AnalysisPronunciationMessage {
   type: 'analysis.pronunciation'
   session_id: string
@@ -221,6 +245,9 @@ export type CanonicalServerMsg =
   | UserTurnFinalMessage
   | AssistantReplyTextMessage
   | AssistantReplyAudioMessage
+  | AssistantReplyAudioStartMessage
+  | AssistantReplyAudioChunkMessage
+  | AssistantReplyAudioEndMessage
   | AnalysisPronunciationMessage
   | AnalysisCorrectionMessage
   | TurnCompletedMessage

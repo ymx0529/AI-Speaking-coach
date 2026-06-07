@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 from base64 import b64encode
+import threading
 from unittest.mock import AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -73,7 +74,8 @@ def test_audio_append_emits_partial_then_final_transcript():
         )
         final_msg = _receive_until(websocket, "user_turn.final")
         reply_msg = _receive_until(websocket, "assistant.reply_text")
-        reply_audio_msg = _receive_until(websocket, "assistant.reply_audio")
+        reply_audio_start_msg = _receive_until(websocket, "assistant.reply_audio_start")
+        reply_audio_chunk_msg = _receive_until(websocket, "assistant.reply_audio_chunk")
 
     assert ready["type"] == "session.ready"
     assert turn_started["type"] == "turn.started"
@@ -85,10 +87,13 @@ def test_audio_append_emits_partial_then_final_transcript():
     assert reply_msg["type"] == "assistant.reply_text"
     assert isinstance(reply_msg["text"], str)
     assert reply_msg["text"]
-    assert reply_audio_msg["type"] == "assistant.reply_audio"
-    assert reply_audio_msg["audio_format"] == "wav_pcm16"
-    assert isinstance(reply_audio_msg["data"], str)
-    assert reply_audio_msg["data"]
+    assert reply_audio_start_msg["type"] == "assistant.reply_audio_start"
+    assert reply_audio_start_msg["total_chunks"] >= 1
+    assert reply_audio_chunk_msg["type"] == "assistant.reply_audio_chunk"
+    assert reply_audio_chunk_msg["sequence"] == 0
+    assert reply_audio_chunk_msg["audio_format"] == "wav_pcm16"
+    assert isinstance(reply_audio_chunk_msg["data"], str)
+    assert reply_audio_chunk_msg["data"]
 
 
 def test_audio_append_publishes_turn_transcript_ready_event_once(monkeypatch):
@@ -164,6 +169,7 @@ def test_audio_append_publishes_analysis_before_tts(monkeypatch):
         return _b64("audio"), "wav_pcm16"
 
     monkeypatch.setattr(event_bus, "publish", fake_publish)
+    monkeypatch.setattr("app.modules.conversation.router.generate_reply", lambda **_kwargs: "One reply.")
     monkeypatch.setattr("app.modules.conversation.router.synthesize_reply_audio", fake_synthesize)
     client = TestClient(app)
 
@@ -192,6 +198,183 @@ def test_audio_append_publishes_analysis_before_tts(monkeypatch):
                 "client_ts": 200,
             }
         )
-        _receive_until(websocket, "assistant.reply_audio")
+        _receive_until(websocket, "assistant.reply_audio_chunk")
 
     assert order == ["publish", "tts"]
+
+
+def test_audio_append_does_not_wait_for_slow_tts(monkeypatch):
+    tts_started = threading.Event()
+    tts_release = threading.Event()
+    order: list[str] = []
+
+    def slow_synthesize(text: str):
+        order.append("tts_started")
+        tts_started.set()
+        tts_release.wait(timeout=2)
+        order.append("tts_done")
+        return _b64("audio"), "wav_pcm16"
+
+    monkeypatch.setattr(event_bus, "publish", AsyncMock())
+    monkeypatch.setattr("app.modules.conversation.router.generate_reply", lambda **_kwargs: "One reply.")
+    monkeypatch.setattr("app.modules.conversation.router.synthesize_reply_audio", slow_synthesize)
+    client = TestClient(app)
+
+    with client.websocket_connect("/ws/session/realtime-4") as websocket:
+        websocket.send_json(
+            {
+                "type": "session.start",
+                "session_id": "realtime-4",
+                "scene_id": "interview",
+                "difficulty": 1,
+                "persona_id": "strict_interviewer",
+                "client_ts": 100,
+            }
+        )
+        websocket.receive_json()
+
+        websocket.send_json(
+            {
+                "type": "audio.append",
+                "session_id": "realtime-4",
+                "turn_id": None,
+                "seq": 0,
+                "encoding": "webm_opus",
+                "chunk": _b64("Hello"),
+                "is_last": True,
+                "client_ts": 200,
+            }
+        )
+
+        _receive_until(websocket, "assistant.reply_text")
+        _receive_until(websocket, "assistant.reply_audio_start")
+        assert tts_started.wait(timeout=1)
+        tts_release.set()
+        _receive_until(websocket, "assistant.reply_audio_chunk")
+        websocket.send_json({"type": "session.finish", "session_id": "realtime-4"})
+
+    assert order == ["tts_started", "tts_done"]
+
+
+def test_audio_append_uses_previous_turn_history(monkeypatch):
+    generate_calls: list[dict] = []
+
+    def fake_generate_reply(**kwargs):
+        generate_calls.append(
+            {
+                "history": list(kwargs["history"]),
+                "user_text": kwargs["user_text"],
+            }
+        )
+        return f"reply-{len(generate_calls)}"
+
+    monkeypatch.setattr(event_bus, "publish", AsyncMock())
+    monkeypatch.setattr("app.modules.conversation.router.generate_reply", fake_generate_reply)
+    monkeypatch.setattr(
+        "app.modules.conversation.router.synthesize_reply_audio",
+        lambda text: (_b64("audio"), "wav_pcm16"),
+    )
+    client = TestClient(app)
+
+    with client.websocket_connect("/ws/session/realtime-5") as websocket:
+        websocket.send_json(
+            {
+                "type": "session.start",
+                "session_id": "realtime-5",
+                "scene_id": "interview",
+                "difficulty": 1,
+                "persona_id": "strict_interviewer",
+                "client_ts": 100,
+            }
+        )
+        websocket.receive_json()
+
+        websocket.send_json(
+            {
+                "type": "audio.append",
+                "session_id": "realtime-5",
+                "turn_id": None,
+                "seq": 0,
+                "encoding": "webm_opus",
+                "chunk": _b64("First answer"),
+                "is_last": True,
+                "client_ts": 200,
+            }
+        )
+        _receive_until(websocket, "assistant.reply_text")
+
+        websocket.send_json(
+            {
+                "type": "audio.append",
+                "session_id": "realtime-5",
+                "turn_id": None,
+                "seq": 0,
+                "encoding": "webm_opus",
+                "chunk": _b64("Second answer"),
+                "is_last": True,
+                "client_ts": 300,
+            }
+        )
+        _receive_until(websocket, "assistant.reply_text")
+
+    assert generate_calls[0]["history"] == []
+    assert generate_calls[0]["user_text"] == "First answer"
+    assert generate_calls[1]["history"] == [
+        {"role": "user", "content": "First answer"},
+        {"role": "assistant", "content": "reply-1"},
+    ]
+    assert generate_calls[1]["user_text"] == "Second answer"
+
+
+def test_audio_append_streams_reply_audio_by_segments(monkeypatch):
+    synthesized_segments: list[str] = []
+
+    def fake_generate_reply(**_kwargs):
+        return "First short answer. Second follow-up question?"
+
+    def fake_synthesize(text: str):
+        synthesized_segments.append(text)
+        return _b64(f"audio:{text}"), "wav_pcm16"
+
+    monkeypatch.setattr(event_bus, "publish", AsyncMock())
+    monkeypatch.setattr("app.modules.conversation.router.generate_reply", fake_generate_reply)
+    monkeypatch.setattr("app.modules.conversation.router.synthesize_reply_audio", fake_synthesize)
+    client = TestClient(app)
+
+    with client.websocket_connect("/ws/session/realtime-6") as websocket:
+        websocket.send_json(
+            {
+                "type": "session.start",
+                "session_id": "realtime-6",
+                "scene_id": "interview",
+                "difficulty": 1,
+                "persona_id": "strict_interviewer",
+                "client_ts": 100,
+            }
+        )
+        websocket.receive_json()
+
+        websocket.send_json(
+            {
+                "type": "audio.append",
+                "session_id": "realtime-6",
+                "turn_id": None,
+                "seq": 0,
+                "encoding": "webm_opus",
+                "chunk": _b64("Hello"),
+                "is_last": True,
+                "client_ts": 200,
+            }
+        )
+        start_msg = _receive_until(websocket, "assistant.reply_audio_start")
+        first_chunk = _receive_until(websocket, "assistant.reply_audio_chunk")
+        second_chunk = _receive_until(websocket, "assistant.reply_audio_chunk")
+        end_msg = _receive_until(websocket, "assistant.reply_audio_end")
+
+    assert start_msg["total_chunks"] == 2
+    assert first_chunk["sequence"] == 0
+    assert first_chunk["text"] == "First short answer."
+    assert second_chunk["sequence"] == 1
+    assert second_chunk["text"] == "Second follow-up question?"
+    assert end_msg["total_chunks"] == 2
+    assert synthesized_segments == ["First short answer.", "Second follow-up question?"]

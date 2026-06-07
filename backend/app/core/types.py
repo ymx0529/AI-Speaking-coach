@@ -182,6 +182,30 @@ class AssistantReplyAudioMessage(BaseModel):
     data: str
 
 
+class AssistantReplyAudioStartMessage(BaseModel):
+    type: Literal["assistant.reply_audio_start"] = "assistant.reply_audio_start"
+    session_id: str
+    turn_id: str
+    total_chunks: int
+
+
+class AssistantReplyAudioChunkMessage(BaseModel):
+    type: Literal["assistant.reply_audio_chunk"] = "assistant.reply_audio_chunk"
+    session_id: str
+    turn_id: str
+    sequence: int
+    audio_format: AudioFormat = "mp3"
+    text: str
+    data: str
+
+
+class AssistantReplyAudioEndMessage(BaseModel):
+    type: Literal["assistant.reply_audio_end"] = "assistant.reply_audio_end"
+    session_id: str
+    turn_id: str
+    total_chunks: int
+
+
 class AnalysisPronunciationMessage(BaseModel):
     type: Literal["analysis.pronunciation"] = "analysis.pronunciation"
     session_id: str

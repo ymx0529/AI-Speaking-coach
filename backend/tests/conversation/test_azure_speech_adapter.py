@@ -6,7 +6,29 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from app.modules.conversation.azure_speech import synthesize_reply_audio
+from app.modules.conversation.azure_speech import split_reply_for_tts, synthesize_reply_audio
+
+
+def test_split_reply_for_tts_uses_sentence_boundaries():
+    segments = split_reply_for_tts("Sure, I can help. What kind of role are you applying for?")
+
+    assert segments == [
+        "Sure, I can help.",
+        "What kind of role are you applying for?",
+    ]
+
+
+def test_split_reply_for_tts_splits_long_sentence():
+    segments = split_reply_for_tts(
+        "Please describe a project where you improved performance, reduced latency, "
+        "and explained the result clearly to your team.",
+        max_chars=70,
+    )
+
+    assert segments == [
+        "Please describe a project where you improved performance,",
+        "reduced latency, and explained the result clearly to your team.",
+    ]
 
 
 @patch("app.modules.conversation.azure_speech._dashscope_synthesize_wav_bytes", return_value=b"RIFFmockWAVE")

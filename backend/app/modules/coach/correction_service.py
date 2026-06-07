@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 _MAX_ISSUES = 5
 _VALID_CATEGORIES = {"grammar", "expression", "vocabulary"}
 _VALID_SEVERITIES = {"high", "medium", "low"}
+_PROVIDER_CUSTOM = "custom"
+_PROVIDER_DASHSCOPE = "dashscope"
 
 _SYSTEM_PROMPT = """\
 You are an English speaking coach. Analyze the student's spoken English and return a JSON object.
@@ -43,37 +45,59 @@ async def analyse(
     transcript: str,
     assistant_reply: str,
 ) -> tuple[list[CorrectionIssue], float | None, float | None, float | None]:
-    """Analyse transcript for grammar/expression/vocabulary issues via LLM.
-
-    Returns (issues, grammar_score, expression_score, vocabulary_score).
-    All values are safe defaults (empty list, None scores) on any failure.
-    """
+    """Analyse transcript for grammar/expression/vocabulary issues via LLM."""
     if not transcript.strip():
         return [], None, None, None
-    if not settings.llm_api_key:
-        logger.warning("LLM_API_KEY not set — skipping correction analysis")
+
+    llm_config = _resolve_llm_config()
+    if llm_config is None:
+        logger.warning("No correction LLM key set - skipping correction analysis")
         return [], None, None, None
 
     try:
-        return await _call_llm(transcript, assistant_reply)
+        return await _call_llm(transcript, assistant_reply, llm_config=llm_config)
     except Exception as exc:
         logger.error("Correction analysis failed: %s", exc)
         return [], None, None, None
 
 
+def _resolve_llm_config() -> dict[str, str] | None:
+    if settings.llm_api_key:
+        return {
+            "provider": _PROVIDER_CUSTOM,
+            "api_key": settings.llm_api_key,
+            "base_url": settings.llm_base_url,
+            "model": settings.llm_model,
+        }
+    if settings.dashscope_api_key:
+        return {
+            "provider": _PROVIDER_DASHSCOPE,
+            "api_key": settings.dashscope_api_key,
+            "base_url": settings.dashscope_base_url,
+            "model": settings.qwen_chat_model,
+        }
+    return None
+
+
 async def _call_llm(
     transcript: str,
     assistant_reply: str,
+    *,
+    llm_config: dict[str, str] | None = None,
 ) -> tuple[list[CorrectionIssue], float | None, float | None, float | None]:
     try:
         from openai import AsyncOpenAI  # noqa: PLC0415
     except ImportError:
-        logger.warning("openai package not installed — skipping correction")
+        logger.warning("openai package not installed - skipping correction")
+        return [], None, None, None
+
+    llm_config = llm_config or _resolve_llm_config()
+    if llm_config is None:
         return [], None, None, None
 
     client = AsyncOpenAI(
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_base_url,
+        api_key=llm_config["api_key"],
+        base_url=llm_config["base_url"],
     )
 
     user_prompt = (
@@ -82,16 +106,19 @@ async def _call_llm(
         "Analyse the student's speech and return the JSON."
     )
 
-    response = await client.chat.completions.create(
-        model=settings.llm_model,
-        messages=[
+    request_kwargs: dict[str, Any] = {
+        "model": llm_config["model"],
+        "messages": [
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        temperature=0.2,
-        max_tokens=800,
-    )
+        "temperature": 0.2,
+        "max_tokens": 500,
+    }
+    if llm_config["provider"] == _PROVIDER_DASHSCOPE:
+        request_kwargs["extra_body"] = {"enable_thinking": False}
 
+    response = await client.chat.completions.create(**request_kwargs)
     raw = response.choices[0].message.content or ""
     return _parse_response(raw)
 

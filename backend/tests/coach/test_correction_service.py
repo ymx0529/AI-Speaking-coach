@@ -16,8 +16,28 @@ async def test_empty_transcript_returns_empty():
 
 async def test_missing_llm_key_returns_empty(monkeypatch):
     monkeypatch.setattr("app.modules.coach.correction_service.settings.llm_api_key", "")
+    monkeypatch.setattr("app.modules.coach.correction_service.settings.dashscope_api_key", "")
     issues, g, e, v = await correction_service.analyse("I want order pasta", "Sure!")
     assert issues == []
+
+
+async def test_uses_dashscope_when_custom_llm_key_missing(monkeypatch):
+    expected = ([], 90.0, 91.0, 92.0)
+    call_mock = AsyncMock(return_value=expected)
+    monkeypatch.setattr("app.modules.coach.correction_service.settings.llm_api_key", "")
+    monkeypatch.setattr("app.modules.coach.correction_service.settings.dashscope_api_key", "dashscope-key")
+    monkeypatch.setattr("app.modules.coach.correction_service.settings.dashscope_base_url", "https://dashscope")
+    monkeypatch.setattr("app.modules.coach.correction_service.settings.qwen_chat_model", "qwen-test")
+    monkeypatch.setattr("app.modules.coach.correction_service._call_llm", call_mock)
+
+    result = await correction_service.analyse("I want order pasta", "Sure!")
+
+    assert result == expected
+    llm_config = call_mock.await_args.kwargs["llm_config"]
+    assert llm_config["provider"] == correction_service._PROVIDER_DASHSCOPE
+    assert llm_config["api_key"] == "dashscope-key"
+    assert llm_config["base_url"] == "https://dashscope"
+    assert llm_config["model"] == "qwen-test"
 
 
 async def test_llm_exception_returns_empty(monkeypatch):
