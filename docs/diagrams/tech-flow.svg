@@ -1,0 +1,127 @@
+<svg width="1600" height="1080" viewBox="0 0 1600 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1600" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FBFF"/>
+      <stop offset="1" stop-color="#EEF4FF"/>
+    </linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+    <filter id="shadow2" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#0F172A" flood-opacity="0.08"/>
+    </filter>
+    <marker id="arrow2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10V0Z" fill="#60A5FA"/>
+    </marker>
+    <style>
+      .title { font: 700 34px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #0F172A; }
+      .subtitle { font: 600 18px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #2563EB; letter-spacing: 2px; }
+      .zoneTitle { font: 700 24px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #0F172A; }
+      .boxTitle { font: 700 20px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #0F172A; }
+      .boxText { font: 400 15px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #475569; }
+      .pill { font: 600 13px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #1D4ED8; }
+      .small { font: 500 14px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #64748B; }
+      .whiteTitle { font: 700 20px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: white; }
+      .whiteText { font: 400 15px 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: rgba(255,255,255,0.9); }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1080" fill="url(#bg2)"/>
+  <text x="84" y="86" class="subtitle">SPEAKCOACH</text>
+  <text x="84" y="132" class="title">技术支撑图</text>
+  <text x="84" y="168" class="small">把用户功能拆到前端、后端核心、AI 能力和外部服务四层来看</text>
+
+  <g filter="url(#shadow2)">
+    <rect x="84" y="220" width="340" height="772" rx="28" fill="url(#front)"/>
+    <text x="120" y="276" class="whiteTitle">前端体验层</text>
+    <text x="120" y="304" class="whiteText">Vue 3 + Vite + Pinia + WebSocket + Axios</text>
+
+    <rect x="120" y="344" width="268" height="118" rx="22" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.18)"/>
+    <text x="144" y="384" class="whiteTitle">首页 / 登录页</text>
+    <text x="144" y="414" class="whiteText">HomePage / AuthView</text>
+    <text x="144" y="438" class="whiteText">进入产品、登录、恢复用户状态</text>
+
+    <rect x="120" y="492" width="268" height="144" rx="22" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.18)"/>
+    <text x="144" y="532" class="whiteTitle">练习入口页</text>
+    <text x="144" y="562" class="whiteText">SceneSelector</text>
+    <text x="144" y="586" class="whiteText">选择固定场景 / 自定义场景</text>
+    <text x="144" y="610" class="whiteText">选择难度并建立会话</text>
+
+    <rect x="120" y="666" width="268" height="160" rx="22" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.18)"/>
+    <text x="144" y="706" class="whiteTitle">会话页</text>
+    <text x="144" y="736" class="whiteText">ConversationRoom / useConversation</text>
+    <text x="144" y="760" class="whiteText">浏览器录音、消息流、AI 语音播放</text>
+    <text x="144" y="784" class="whiteText">实时显示识别、回复、分析栏</text>
+
+    <rect x="120" y="856" width="268" height="100" rx="22" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.18)"/>
+    <text x="144" y="896" class="whiteTitle">总结页</text>
+    <text x="144" y="926" class="whiteText">SessionSummaryPanel / useCoach</text>
+  </g>
+
+  <g filter="url(#shadow2)">
+    <rect x="476" y="220" width="452" height="772" rx="28" fill="#FFFFFF" stroke="#DCE7F7"/>
+    <text x="516" y="276" class="zoneTitle">后端核心层</text>
+    <text x="516" y="304" class="small">FastAPI + Pydantic + EventBus + Session Manager</text>
+
+    <rect x="516" y="344" width="372" height="124" rx="22" fill="#F8FBFF" stroke="#DCE7F7"/>
+    <text x="540" y="384" class="boxTitle">鉴权模块</text>
+    <text x="540" y="414" class="boxText">auth/router.py + service.py</text>
+    <text x="540" y="438" class="boxText">注册、登录、/auth/me、Bearer Token 校验</text>
+
+    <rect x="516" y="496" width="372" height="164" rx="22" fill="#F8FBFF" stroke="#DCE7F7"/>
+    <text x="540" y="536" class="boxTitle">对话编排模块</text>
+    <text x="540" y="566" class="boxText">conversation/router.py + session_manager.py</text>
+    <text x="540" y="590" class="boxText">接收音频、维护轮次、保存 history、推送 WS 消息</text>
+    <text x="540" y="614" class="boxText">串联 ASR、LLM、TTS，并在结束时切到总结页</text>
+
+    <rect x="516" y="688" width="372" height="164" rx="22" fill="#F8FBFF" stroke="#DCE7F7"/>
+    <text x="540" y="728" class="boxTitle">教练分析模块</text>
+    <text x="540" y="758" class="boxText">coach/turn_handler.py + correction_service.py</text>
+    <text x="540" y="782" class="boxText">异步评测发音、分析语法/表达/词汇、实时推送侧栏</text>
+    <text x="540" y="806" class="boxText">summary_service.py 汇总练习报告</text>
+
+    <rect x="516" y="880" width="372" height="76" rx="18" fill="#EFF6FF"/>
+    <text x="540" y="926" class="pill">共享支撑：core/types.py / ws_hub.py / event_bus.py / config.py</text>
+  </g>
+
+  <g filter="url(#shadow2)">
+    <rect x="980" y="220" width="536" height="772" rx="28" fill="#FFFFFF" stroke="#DCE7F7"/>
+    <text x="1020" y="276" class="zoneTitle">AI 与外部能力层</text>
+    <text x="1020" y="304" class="small">负责语音识别、对话生成、语音合成、发音评测与纠错</text>
+
+    <rect x="1020" y="344" width="456" height="96" rx="20" fill="#F8FBFF" stroke="#DCE7F7"/>
+    <text x="1044" y="382" class="boxTitle">Qwen ASR</text>
+    <text x="1044" y="410" class="boxText">qwen_stt.py → qwen3-asr-flash，将音频转为英文文本</text>
+
+    <rect x="1020" y="462" width="456" height="96" rx="20" fill="#F8FBFF" stroke="#DCE7F7"/>
+    <text x="1044" y="500" class="boxTitle">Qwen Chat</text>
+    <text x="1044" y="528" class="boxText">llm_client.py → qwen3.5-flash，结合场景 / 难度 / 历史生成回复</text>
+
+    <rect x="1020" y="580" width="456" height="96" rx="20" fill="#F8FBFF" stroke="#DCE7F7"/>
+    <text x="1044" y="618" class="boxTitle">CosyVoice TTS</text>
+    <text x="1044" y="646" class="boxText">azure_speech.py，合成 AI 回复音频并分段回传前端播放</text>
+
+    <rect x="1020" y="698" width="456" height="116" rx="20" fill="#F8FBFF" stroke="#DCE7F7"/>
+    <text x="1044" y="736" class="boxTitle">发音评测 Provider</text>
+    <text x="1044" y="764" class="boxText">pronunciation_service.py</text>
+    <text x="1044" y="788" class="boxText">优先讯飞 ISE，可回退 Azure Pronunciation Assessment</text>
+
+    <rect x="1020" y="836" width="456" height="120" rx="20" fill="#F8FBFF" stroke="#DCE7F7"/>
+    <text x="1044" y="874" class="boxTitle">纠错与表达优化</text>
+    <text x="1044" y="902" class="boxText">correction_service.py</text>
+    <text x="1044" y="926" class="boxText">Qwen 或 OpenAI 兼容模型输出 JSON 纠错结果与 sample answer</text>
+  </g>
+
+  <path d="M424 606H476" stroke="#60A5FA" stroke-width="4" marker-end="url(#arrow2)"/>
+  <path d="M928 606H980" stroke="#60A5FA" stroke-width="4" marker-end="url(#arrow2)"/>
+
+  <rect x="502" y="152" width="176" height="40" rx="20" fill="#DBEAFE"/>
+  <text x="528" y="177" class="pill">用户可见功能</text>
+
+  <rect x="690" y="152" width="176" height="40" rx="20" fill="#DCFCE7"/>
+  <text x="716" y="177" class="pill">业务编排与状态</text>
+
+  <rect x="878" y="152" width="176" height="40" rx="20" fill="#FEF3C7"/>
+  <text x="904" y="177" class="pill">模型与外部服务</text>
+</svg>
