@@ -121,4 +121,5 @@ def _to_turn_record(t: TurnAnalysisRecord) -> TurnRecord:
             overall=0, accuracy=0, fluency=0, completeness=0
         ),
         corrections=t.corrections,
+        sample_answer=t.sample_answer,
     )

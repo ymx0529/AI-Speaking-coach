@@ -76,6 +76,7 @@ export interface TurnRecord {
   ai_reply: string
   pron_score: PronScore
   corrections: CorrectionIssue[]
+  sample_answer?: string
 }
 
 export interface SessionSummaryResponse {
@@ -216,6 +217,10 @@ export interface AnalysisCorrectionMessage {
   session_id: string
   turn_id: string
   issues: CorrectionIssue[]
+  grammar_score?: number | null
+  expression_score?: number | null
+  vocabulary_score?: number | null
+  sample_answer?: string
 }
 
 export interface TurnCompletedMessage {
@@ -271,7 +276,7 @@ export type LegacyServerMsg =
   | { type: 'pron_score'; turn_id: string; overall: number; accuracy: number; fluency: number; completeness: number; words: WordScore[] }
   | { type: 'reply_text'; turn_id: string; text: string }
   | { type: 'reply_audio'; turn_id: string; data: string }
-  | { type: 'correction'; turn_id: string; issues: CorrectionIssue[] }
+  | { type: 'correction'; turn_id: string; issues: CorrectionIssue[]; sample_answer?: string }
   | { type: 'turn_end'; turn_id: string }
   | { type: 'error'; code: string; message: string; retryable?: boolean }
 

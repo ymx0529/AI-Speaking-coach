@@ -31,11 +31,18 @@ Return ONLY valid JSON with these fields:
   ],
   "grammar_score": <0-100>,
   "expression_score": <0-100>,
-  "vocabulary_score": <0-100>
+  "vocabulary_score": <0-100>,
+  "sample_answer": "<the corrected version of the student's transcript only>"
 }
 
 Rules:
+- Analyze only the speech recognition transcript provided by the student.
 - Return at most 5 issues, focusing on the most important ones.
+- Cover grammar, expression, and vocabulary issues when they are present.
+- Do not invent problems. If a category has no issue, simply omit that category from issues.
+- The sample_answer must be a corrected/standard version of the student's own words only.
+- Do not answer the AI, continue the conversation, add examples, invent facts, or expand beyond what the student said.
+- If the transcript is already natural, sample_answer must repeat the transcript with only light punctuation/capitalization cleanup.
 - If speech is correct, return empty issues array with high scores (85-100).
 - No explanation outside the JSON object.\
 """
@@ -44,21 +51,21 @@ Rules:
 async def analyse(
     transcript: str,
     assistant_reply: str,
-) -> tuple[list[CorrectionIssue], float | None, float | None, float | None]:
+) -> tuple[list[CorrectionIssue], float | None, float | None, float | None, str]:
     """Analyse transcript for grammar/expression/vocabulary issues via LLM."""
     if not transcript.strip():
-        return [], None, None, None
+        return [], None, None, None, ""
 
     llm_config = _resolve_llm_config()
     if llm_config is None:
         logger.warning("No correction LLM key set - skipping correction analysis")
-        return [], None, None, None
+        return [], None, None, None, transcript.strip()
 
     try:
         return await _call_llm(transcript, assistant_reply, llm_config=llm_config)
     except Exception as exc:
         logger.error("Correction analysis failed: %s", exc)
-        return [], None, None, None
+        return [], None, None, None, transcript.strip()
 
 
 def _resolve_llm_config() -> dict[str, str] | None:
@@ -81,19 +88,19 @@ def _resolve_llm_config() -> dict[str, str] | None:
 
 async def _call_llm(
     transcript: str,
-    assistant_reply: str,
+    _assistant_reply: str,
     *,
     llm_config: dict[str, str] | None = None,
-) -> tuple[list[CorrectionIssue], float | None, float | None, float | None]:
+) -> tuple[list[CorrectionIssue], float | None, float | None, float | None, str]:
     try:
         from openai import AsyncOpenAI  # noqa: PLC0415
     except ImportError:
         logger.warning("openai package not installed - skipping correction")
-        return [], None, None, None
+        return [], None, None, None, transcript.strip()
 
     llm_config = llm_config or _resolve_llm_config()
     if llm_config is None:
-        return [], None, None, None
+        return [], None, None, None, transcript.strip()
 
     client = AsyncOpenAI(
         api_key=llm_config["api_key"],
@@ -101,9 +108,8 @@ async def _call_llm(
     )
 
     user_prompt = (
-        f'Student said: "{transcript}"\n'
-        f'AI replied: "{assistant_reply}"\n\n'
-        "Analyse the student's speech and return the JSON."
+        f'Speech recognition transcript: "{transcript}"\n\n'
+        "Correct only this transcript. Do not use any surrounding conversation to add new content."
     )
 
     request_kwargs: dict[str, Any] = {
@@ -120,24 +126,30 @@ async def _call_llm(
 
     response = await client.chat.completions.create(**request_kwargs)
     raw = response.choices[0].message.content or ""
-    return _parse_response(raw)
+    return _parse_response(raw, transcript=transcript)
 
 
 def _parse_response(
     raw: str,
-) -> tuple[list[CorrectionIssue], float | None, float | None, float | None]:
+    transcript: str = "",
+) -> tuple[list[CorrectionIssue], float | None, float | None, float | None, str]:
     try:
         data: dict[str, Any] = json.loads(raw.strip())
     except json.JSONDecodeError:
         logger.warning("LLM returned non-JSON: %s", raw[:200])
-        return [], None, None, None
+        return [], None, None, None, transcript.strip()
 
     issues = _parse_issues(data.get("issues", []))
     grammar_score = _safe_score(data.get("grammar_score"))
     expression_score = _safe_score(data.get("expression_score"))
     vocabulary_score = _safe_score(data.get("vocabulary_score"))
+    sample_answer = _select_sample_answer(
+        transcript=transcript,
+        issues=issues,
+        raw_sample=data.get("sample_answer"),
+    )
 
-    return issues, grammar_score, expression_score, vocabulary_score
+    return issues, grammar_score, expression_score, vocabulary_score, sample_answer
 
 
 def _parse_issues(raw_issues: Any) -> list[CorrectionIssue]:
@@ -174,10 +186,66 @@ def _safe_score(value: Any) -> float | None:
         return None
 
 
-def build_ws_payload(session_id: str, turn_id: str, issues: list[CorrectionIssue]) -> dict:
+def _safe_sample_answer(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.split())[:600]
+
+
+def _select_sample_answer(
+    *,
+    transcript: str,
+    issues: list[CorrectionIssue],
+    raw_sample: Any,
+) -> str:
+    fallback = _build_sample_answer(transcript, issues)
+    sample = _safe_sample_answer(raw_sample)
+    if not sample:
+        return fallback
+    if _looks_expanded_beyond_transcript(transcript, sample):
+        return fallback
+    return sample
+
+
+def _looks_expanded_beyond_transcript(transcript: str, sample: str) -> bool:
+    source_words = transcript.split()
+    sample_words = sample.split()
+    if not source_words:
+        return bool(sample_words)
+
+    max_allowed_words = max(len(source_words) + 6, int(len(source_words) * 1.8))
+    if len(sample_words) > max_allowed_words:
+        return True
+
+    max_allowed_chars = max(len(transcript) + 60, int(len(transcript) * 2.2))
+    return len(sample) > max_allowed_chars
+
+
+def _build_sample_answer(transcript: str, issues: list[CorrectionIssue]) -> str:
+    sample = transcript.strip()
+    for issue in issues:
+        if issue.original and issue.corrected:
+            sample = sample.replace(issue.original, issue.corrected)
+    return " ".join(sample.split())
+
+
+def build_ws_payload(
+    session_id: str,
+    turn_id: str,
+    issues: list[CorrectionIssue],
+    *,
+    grammar_score: float | None = None,
+    expression_score: float | None = None,
+    vocabulary_score: float | None = None,
+    sample_answer: str = "",
+) -> dict:
     return {
         "type": "analysis.correction",
         "session_id": session_id,
         "turn_id": turn_id,
         "issues": [issue.model_dump() for issue in issues],
+        "grammar_score": grammar_score,
+        "expression_score": expression_score,
+        "vocabulary_score": vocabulary_score,
+        "sample_answer": sample_answer,
     }

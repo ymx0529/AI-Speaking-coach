@@ -48,6 +48,7 @@ class TurnRecord(BaseModel):
     ai_reply: str
     pron_score: PronScore
     corrections: list[CorrectionIssue] = Field(default_factory=list)
+    sample_answer: str = ""
 
 
 # Legacy event published by conversation/router.py (v1 mock).
@@ -86,6 +87,7 @@ class TurnAnalysisReadyEvent(BaseModel):
     grammar_score: float | None = None
     expression_score: float | None = None
     vocabulary_score: float | None = None
+    sample_answer: str = ""
 
 
 class SessionSummaryResponse(BaseModel):
@@ -224,6 +226,10 @@ class AnalysisCorrectionMessage(BaseModel):
     session_id: str
     turn_id: str
     issues: list[CorrectionIssue] = Field(default_factory=list)
+    grammar_score: float | None = None
+    expression_score: float | None = None
+    vocabulary_score: float | None = None
+    sample_answer: str = ""
 
 
 class TurnCompletedMessage(BaseModel):

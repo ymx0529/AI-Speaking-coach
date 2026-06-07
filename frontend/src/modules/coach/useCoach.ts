@@ -26,7 +26,7 @@ function handleCoachMessage(msg: ServerMsg, store: ReturnType<typeof useAppStore
       store.setPronunciationResult(msg.turn_id, toPronScore(msg))
       break
     case 'analysis.correction':
-      store.setCorrectionsResult(msg.turn_id, msg.issues)
+      store.setCorrectionsResult(msg.turn_id, msg.issues, msg.sample_answer ?? '')
       store.setCoachAnalysisStatus(msg.turn_id, 'analyzed')
       break
 
@@ -41,7 +41,7 @@ function handleCoachMessage(msg: ServerMsg, store: ReturnType<typeof useAppStore
       })
       break
     case 'correction':
-      store.setCorrectionsResult(msg.turn_id, msg.issues)
+      store.setCorrectionsResult(msg.turn_id, msg.issues, msg.sample_answer ?? '')
       store.setCoachAnalysisStatus(msg.turn_id, 'analyzed')
       break
   }

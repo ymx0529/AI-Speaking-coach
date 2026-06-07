@@ -58,7 +58,6 @@ export const useAppStore = defineStore('app', {
     authLoading: false,
     authError: '',
 
-    // ── Conversation State (Dev A) ────────────────────────────
     sessionId: null as string | null,
     sceneId: null as string | null,
     difficulty: 1 as 1 | 2 | 3,
@@ -73,15 +72,17 @@ export const useAppStore = defineStore('app', {
     aiReplyText: '',
     currentPronScore: null as PronScore | null,
     currentCorrections: [] as CorrectionIssue[],
+    currentSampleAnswer: '',
     summary: null as SessionSummaryResponse | null,
     lastError: null as { code: ErrorCode | string; message: string; retryable?: boolean } | null,
-    // ── Coach Analysis State (Dev B) ─────────────────────────
+
     pronunciationByTurn: {} as Record<string, PronScore>,
     correctionsByTurn: {} as Record<string, CorrectionIssue[]>,
+    sampleAnswerByTurn: {} as Record<string, string>,
     coachAnalysisStatus: {} as Record<string, 'pending' | 'analyzed' | 'failed'>,
+    latestAnalyzedTurnId: null as string | null,
     summaryReady: false,
     summaryLoading: false,
-    // ─────────────────────────────────────────────────────────
   }),
 
   actions: {
@@ -193,11 +194,14 @@ export const useAppStore = defineStore('app', {
       this.aiReplyText = ''
       this.currentPronScore = null
       this.currentCorrections = []
+      this.currentSampleAnswer = ''
       this.summary = null
       this.lastError = null
       this.pronunciationByTurn = {}
       this.correctionsByTurn = {}
+      this.sampleAnswerByTurn = {}
       this.coachAnalysisStatus = {}
+      this.latestAnalyzedTurnId = null
       this.summaryReady = false
       this.summaryLoading = false
     },
@@ -233,13 +237,14 @@ export const useAppStore = defineStore('app', {
       this.currentTurnId = null
       this.asrText = ''
       this.aiReplyText = ''
+      this.isSpeaking = false
       this.isReplyAudioPending = false
       this.currentPronScore = null
       this.currentCorrections = []
+      this.currentSampleAnswer = ''
       this.lastError = null
     },
 
-    // ── Coach actions (Dev B) ─────────────────────────────────
     setCoachAnalysisStatus(turnId: string, status: 'pending' | 'analyzed' | 'failed') {
       this.coachAnalysisStatus[turnId] = status
     },
@@ -251,10 +256,14 @@ export const useAppStore = defineStore('app', {
       }
     },
 
-    setCorrectionsResult(turnId: string, issues: CorrectionIssue[]) {
+    setCorrectionsResult(turnId: string, issues: CorrectionIssue[], sampleAnswer = '') {
       this.correctionsByTurn[turnId] = issues
+      this.sampleAnswerByTurn[turnId] = sampleAnswer
+      this.coachAnalysisStatus[turnId] = 'analyzed'
+      this.latestAnalyzedTurnId = turnId
       if (this.currentTurnId === turnId) {
         this.currentCorrections = issues
+        this.currentSampleAnswer = sampleAnswer
       }
     },
 
@@ -263,6 +272,5 @@ export const useAppStore = defineStore('app', {
       this.summaryReady = false
       this.summaryLoading = false
     },
-    // ─────────────────────────────────────────────────────────
   },
 })

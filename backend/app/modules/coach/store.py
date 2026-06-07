@@ -25,6 +25,7 @@ class TurnAnalysisRecord:
     grammar_score: float | None = None
     expression_score: float | None = None
     vocabulary_score: float | None = None
+    sample_answer: str = ""
 
 
 # {session_id: {turn_id: TurnAnalysisRecord}}
