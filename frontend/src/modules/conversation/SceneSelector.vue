@@ -1,228 +1,127 @@
 <template>
-  <section class="mx-auto max-w-7xl px-5 py-8 lg:px-8 lg:py-10">
-    <div class="overflow-hidden rounded-[24px] border border-[color:var(--line-soft)] bg-[var(--surface-0)] shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
-      <div class="border-b border-[color:var(--line-soft)] px-6 py-5 lg:px-8">
-        <div class="flex flex-wrap items-center justify-between gap-4">
-          <div class="flex items-center gap-4">
-            <div
-              class="flex h-14 w-14 items-center justify-center rounded-[22px] bg-[linear-gradient(135deg,#2563eb_0%,#38bdf8_100%)] text-xl font-bold text-white shadow-[0_18px_40px_rgba(37,99,235,0.28)]"
+  <section class="min-h-screen px-5 py-6 lg:px-8 lg:py-8">
+    <div class="mx-auto max-w-7xl rounded-[28px] border border-[color:var(--line-soft)] bg-[var(--surface-0)] shadow-[var(--shadow-soft)]">
+      <header class="flex flex-wrap items-center justify-between gap-4 border-b border-[color:var(--line-soft)] px-6 py-5 lg:px-8">
+        <div>
+          <button class="text-sm font-medium text-[var(--ink-3)] transition hover:text-[var(--ink-1)]" @click="$emit('back')">
+            返回首页
+          </button>
+          <h1 class="mt-3 text-3xl font-semibold tracking-tight text-[var(--ink-1)] lg:text-4xl">选择练习方式</h1>
+          <p class="mt-2 text-sm leading-7 text-[var(--ink-3)]">先选难度，再进入固定场景，或者直接创建一个自己的对话背景。</p>
+        </div>
+        <UserAccountBadge />
+      </header>
+
+      <div class="grid gap-6 px-6 py-8 lg:grid-cols-[18rem_minmax(0,1fr)] lg:px-8 lg:py-8">
+        <aside class="rounded-[24px] bg-[linear-gradient(180deg,#0f172a_0%,#1d4ed8_100%)] p-5 text-white shadow-[0_24px_60px_rgba(29,78,216,0.18)]">
+          <div class="text-xs uppercase tracking-[0.18em] text-sky-100/80">Difficulty</div>
+          <div class="mt-3 text-2xl font-semibold">先选难度</div>
+          <div class="mt-2 text-sm leading-7 text-sky-50/80">难度越高，追问越紧，表达要求也更完整。</div>
+
+          <div class="mt-6 space-y-3">
+            <button
+              v-for="item in difficultyOptions"
+              :key="item.value"
+              class="w-full rounded-[18px] border px-4 py-4 text-left transition"
+              :class="
+                selectedDifficulty === item.value
+                  ? 'border-white/70 bg-white/16'
+                  : 'border-white/12 bg-white/6 hover:bg-white/10'
+              "
+              @click="selectedDifficulty = item.value"
             >
-              S
-            </div>
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <div class="text-base font-semibold">{{ item.label }}</div>
+                  <div class="mt-1 text-sm text-sky-50/80">{{ item.description }}</div>
+                </div>
+                <div class="flex h-7 w-7 items-center justify-center rounded-full border border-white/20 text-xs">
+                  {{ item.value }}
+                </div>
+              </div>
+            </button>
+          </div>
+        </aside>
+
+        <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <section class="space-y-5">
             <div>
-              <div class="text-2xl font-semibold tracking-tight text-[var(--ink-2)]">SpeakCoach</div>
-              <div class="mt-1 text-sm text-[var(--ink-3)]">AI 英语口语陪练，按你的场景和难度即时生成对话</div>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-3">
-            <div class="hidden items-center gap-3 rounded-full border border-[color:var(--line-soft)] bg-[var(--brand-50)] px-4 py-2 text-sm font-medium text-[var(--brand-500)] md:flex">
-              <span class="inline-block h-2.5 w-2.5 rounded-full bg-sky-500" />
-              当前支持实时录音与 Qwen 陪练
-            </div>
-            <UserAccountBadge />
-          </div>
-        </div>
-      </div>
-
-      <div class="grid gap-8 px-6 py-7 lg:grid-cols-[1.4fr_0.95fr] lg:px-8 lg:py-9">
-        <div class="space-y-7">
-          <div class="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-            <div class="rounded-[20px] bg-[radial-gradient(circle_at_top_left,#fef3c7_0%,#ffffff_34%,#eef4ff_100%)] p-7">
-              <div class="inline-flex items-center rounded-full bg-amber-100/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
-                Scenario Practice
-              </div>
-              <h1 class="mt-5 max-w-xl text-4xl font-semibold leading-tight tracking-tight text-slate-950 lg:text-[3.2rem]">
-                在真实场景中练习表达，
-                <span class="text-[var(--brand-500)]">让 AI 更懂你的陪练目标</span>
-              </h1>
-              <p class="mt-5 max-w-2xl text-base leading-8 text-[var(--ink-3)]">
-                先选难度，再进入固定场景，或者直接输入你自己的背景。AI 会根据场景压力、角色关系和目标，给出更贴近真实交流的追问和回应。
-              </p>
-
-              <div class="mt-7 flex flex-wrap gap-3">
-                <div class="rounded-[16px] border border-white/80 bg-white/80 px-4 py-3 shadow-sm">
-                  <div class="text-xs uppercase tracking-[0.14em] text-[var(--ink-4)]">训练模式</div>
-                  <div class="mt-1 text-sm font-semibold text-[var(--ink-2)]">固定场景 / 自定义场景</div>
-                </div>
-                <div class="rounded-[16px] border border-white/80 bg-white/80 px-4 py-3 shadow-sm">
-                  <div class="text-xs uppercase tracking-[0.14em] text-slate-400">难度控制</div>
-                  <div class="mt-1 text-sm font-semibold text-slate-800">入门 / 进阶 / 困难</div>
-                </div>
-                <div class="rounded-[16px] border border-white/80 bg-white/80 px-4 py-3 shadow-sm">
-                  <div class="text-xs uppercase tracking-[0.14em] text-slate-400">陪练风格</div>
-                  <div class="mt-1 text-sm font-semibold text-slate-800">按背景动态追问</div>
-                </div>
-              </div>
+              <div class="text-sm font-semibold text-[var(--ink-2)]">固定场景</div>
+              <p class="mt-1 text-sm text-[var(--ink-3)]">选择一个场景，系统会自动用对应身份继续陪练。</p>
             </div>
 
-            <div class="rounded-[20px] bg-[linear-gradient(160deg,#0f172a_0%,#1d4ed8_55%,#38bdf8_100%)] p-7 text-white shadow-[0_22px_54px_rgba(37,99,235,0.2)]">
-              <div class="text-xs uppercase tracking-[0.18em] text-sky-100/80">Difficulty Router</div>
-              <div class="mt-4 text-2xl font-semibold leading-snug">
-                先定训练强度，
-                <br />
-                再开始这一轮对话
-              </div>
-              <p class="mt-4 text-sm leading-7 text-sky-50/85">
-                你选择的难度会直接影响 AI 的词汇复杂度、追问深度和场景压迫感。
-              </p>
-
-              <div class="mt-6 space-y-3">
-                <button
-                  v-for="option in difficultyOptions"
-                  :key="option.value"
-                  type="button"
-                  class="flex w-full items-start justify-between rounded-[16px] border px-4 py-4 text-left transition"
-                  :class="
-                    selectedDifficulty === option.value
-                      ? 'border-white/60 bg-white/18 shadow-[0_12px_30px_rgba(15,23,42,0.18)]'
-                      : 'border-white/15 bg-white/8 hover:bg-white/12'
-                  "
-                  @click="selectedDifficulty = option.value"
-                >
-                  <div>
-                    <div class="text-base font-semibold">{{ option.label }}</div>
-                    <div class="mt-1 text-sm leading-6 text-sky-50/78">{{ option.description }}</div>
-                  </div>
-                  <div
-                    class="mt-1 flex h-6 w-6 items-center justify-center rounded-full border text-xs"
-                    :class="selectedDifficulty === option.value ? 'border-white bg-white text-slate-900' : 'border-white/40 text-white/80'"
-                  >
-                    {{ selectedDifficulty === option.value ? '✓' : option.short }}
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="space-y-4">
-            <div class="flex items-center justify-between gap-4">
-              <div>
-                <div class="text-sm font-semibold text-slate-900">固定场景</div>
-                <div class="mt-1 text-sm text-slate-500">选择一个现成场景，直接开始一轮针对性的英语口语练习。</div>
-              </div>
-              <div class="rounded-full bg-slate-100 px-4 py-2 text-xs font-medium text-slate-500">
-                当前难度：{{ difficultyLabel }}
-              </div>
-            </div>
-
-            <div class="grid gap-4 md:grid-cols-3">
-              <button
-                v-for="(scene, sceneId) in fixedSceneCards"
-                :key="sceneId"
-                type="button"
-                class="group relative overflow-hidden rounded-[18px] border border-slate-100 bg-white p-5 text-left shadow-[0_16px_40px_rgba(15,23,42,0.05)] transition duration-300 hover:-translate-y-1 hover:border-sky-200 hover:shadow-[0_22px_54px_rgba(59,130,246,0.12)]"
-                :aria-label="`开始${scene.name_zh}场景，当前难度${difficultyLabel}`"
-                @click="start(sceneId)"
+            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <article
+                v-for="scene in fixedScenes"
+                :key="scene.id"
+                class="flex flex-col rounded-[24px] border border-[color:var(--line-soft)] bg-white p-5"
               >
-                <div class="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top_right,rgba(56,189,248,0.16),transparent_58%)]" />
-                <div class="relative">
-                  <div class="flex h-14 w-14 items-center justify-center rounded-[14px] text-2xl shadow-lg" :class="scene.iconBg">
-                    {{ scene.icon }}
-                  </div>
-                  <div class="mt-5 text-lg font-semibold text-slate-900">{{ scene.name_zh }}</div>
-                  <div class="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
-                    {{ scene.name }}
-                  </div>
-                  <p class="mt-4 min-h-[92px] text-sm leading-7 text-slate-500">
-                    {{ scene.description }}
-                  </p>
-
-                  <div class="mt-5 flex items-center justify-between">
-                    <div class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500">
-                      {{ difficultyLabel }}
-                    </div>
-                    <div class="flex h-10 w-10 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition group-hover:translate-x-1">
-                      →
-                    </div>
-                  </div>
+                <div class="flex h-12 w-12 items-center justify-center rounded-[16px] text-xl" :class="scene.iconClass">
+                  {{ scene.icon }}
                 </div>
-              </button>
+                <div class="mt-5 text-2xl font-semibold tracking-tight text-[var(--ink-1)]">{{ scene.title }}</div>
+                <div class="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--ink-4)]">{{ scene.subtitle }}</div>
+                <p class="mt-4 flex-1 text-sm leading-7 text-[var(--ink-3)]">{{ scene.description }}</p>
+                <div class="mt-5 flex items-center justify-between">
+                  <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-[var(--ink-3)]">
+                    难度：{{ currentDifficultyLabel }}
+                  </span>
+                  <button
+                    class="rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="startingSceneId === scene.id"
+                    @click="startFixedScene(scene.id, scene.personaId)"
+                  >
+                    {{ startingSceneId === scene.id ? '进入中...' : '开始' }}
+                  </button>
+                </div>
+              </article>
             </div>
-          </div>
-        </div>
+          </section>
 
-        <div class="space-y-5">
-          <div class="overflow-hidden rounded-[20px] bg-[linear-gradient(180deg,#f8fbff_0%,#eef6ff_100%)] p-6 shadow-inner">
+          <aside class="rounded-[24px] border border-[color:var(--line-soft)] bg-white p-5">
             <div class="flex items-center justify-between gap-3">
               <div>
-                <div class="text-xs uppercase tracking-[0.18em] text-sky-500">Custom Lab</div>
-                <div class="mt-2 text-2xl font-semibold tracking-tight text-slate-950">自定义场景陪练</div>
+                <div class="text-sm font-semibold text-[var(--ink-2)]">自定义场景</div>
+                <p class="mt-1 text-sm text-[var(--ink-3)]">写下背景、目标或难点，让 AI 按你的情境继续对话。</p>
               </div>
-              <div class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-500 shadow-sm">
-                实时生成提示词
-              </div>
+              <span class="rounded-full bg-[var(--brand-50)] px-3 py-1 text-xs font-semibold text-[var(--brand-500)]">
+                AI 生成
+              </span>
             </div>
 
-            <p class="mt-4 text-sm leading-7 text-slate-600">
-              描述你的真实背景、角色关系、目标和压力点。AI 会把这些信息作为场景上下文，用更贴合的英语来跟你对练。
-            </p>
-
-            <div class="mt-5 rounded-[18px] border border-white/70 bg-white/88 p-4 shadow-sm">
-              <label class="mb-2 block text-sm font-semibold text-slate-800" for="custom-background">
-                场景背景
-              </label>
+            <div class="mt-5">
+              <label class="mb-2 block text-sm font-medium text-[var(--ink-2)]">场景背景</label>
               <textarea
-                id="custom-background"
                 v-model.trim="customBackground"
-                rows="7"
-                class="w-full resize-none rounded-[16px] border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100"
-                placeholder="例如：我要模拟和美国客户开会，解释项目延期一周的原因，并争取对方接受新的交付时间。对方比较强势，我希望练习更自然、更有说服力的表达。"
+                class="h-52 w-full resize-none rounded-[18px] border border-[color:var(--line-strong)] bg-[var(--surface-2)] px-4 py-3 text-sm leading-7 outline-none transition focus:border-[var(--brand-500)]"
+                maxlength="240"
+                placeholder="例如：我要向客户解释项目延期一周，并争取对方接受新的时间。"
               />
-
-              <div class="mt-3 flex items-center justify-between gap-3 text-xs text-slate-400">
-                <span>建议写清楚角色、目标和难点，这样 AI 追问会更精准。</span>
+              <div class="mt-2 flex items-center justify-between text-xs text-[var(--ink-4)]">
+                <span>建议写清角色、目标和难点。</span>
                 <span>{{ customBackground.length }}/240</span>
               </div>
             </div>
 
             <div class="mt-5 grid gap-3 sm:grid-cols-2">
-              <div class="rounded-[16px] bg-white/88 p-4 shadow-sm">
-                <div class="text-xs uppercase tracking-[0.14em] text-slate-400">当前难度</div>
-                <div class="mt-2 text-lg font-semibold text-slate-900">{{ difficultyLabel }}</div>
-                <div class="mt-2 text-sm leading-6 text-slate-500">{{ currentDifficultyDescription }}</div>
+              <div class="rounded-[18px] bg-[var(--surface-2)] px-4 py-4">
+                <div class="text-xs uppercase tracking-[0.16em] text-[var(--ink-4)]">当前难度</div>
+                <div class="mt-2 text-lg font-semibold text-[var(--ink-1)]">{{ currentDifficultyLabel }}</div>
               </div>
-              <div class="rounded-[16px] bg-white/88 p-4 shadow-sm">
-                <div class="text-xs uppercase tracking-[0.14em] text-slate-400">AI 将会</div>
-                <div class="mt-2 text-sm leading-7 text-slate-600">
-                  读取你的背景，模拟对应角色，并围绕关键冲突点持续追问。
-                </div>
+              <div class="rounded-[18px] bg-[var(--surface-2)] px-4 py-4">
+                <div class="text-xs uppercase tracking-[0.16em] text-[var(--ink-4)]">AI 会怎么练</div>
+                <div class="mt-2 text-sm leading-7 text-[var(--ink-3)]">{{ difficultyHint }}</div>
               </div>
             </div>
 
-            <div class="mt-5 flex flex-col gap-3">
-              <button
-                type="button"
-                class="w-full rounded-[22px] px-5 py-4 text-sm font-semibold text-white shadow-[0_20px_45px_rgba(14,116,144,0.26)] transition"
-                :class="
-                  canStartCustom
-                    ? 'bg-[linear-gradient(135deg,#0f172a_0%,#2563eb_55%,#06b6d4_100%)] hover:-translate-y-0.5'
-                    : 'cursor-not-allowed bg-slate-300 shadow-none'
-                "
-                :disabled="!canStartCustom"
-                :aria-label="`开始自定义场景陪练，当前难度${difficultyLabel}`"
-                @click="start('custom')"
-              >
-                开始自定义陪练
-              </button>
-              <div v-if="!canStartCustom" class="text-sm text-amber-600">
-                先填写场景背景，按钮就会自动启用。
-              </div>
-              <div v-if="errorMessage" class="rounded-[20px] bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                {{ errorMessage }}
-              </div>
-            </div>
-          </div>
-
-          <div class="rounded-[20px] bg-slate-950 p-6 text-white shadow-[0_24px_60px_rgba(15,23,42,0.2)]">
-            <div class="text-xs uppercase tracking-[0.18em] text-sky-300/90">How It Feels</div>
-            <div class="mt-3 text-2xl font-semibold leading-snug">像一个真的对话对象，而不是只会机械提问的脚本</div>
-            <ul class="mt-5 space-y-3 text-sm leading-7 text-slate-300">
-              <li>固定场景适合快速进入状态，马上开口。</li>
-              <li>自定义场景适合模拟你自己的面试、会议、客户沟通和汇报压力。</li>
-              <li>难度越高，AI 的英语越自然、追问越紧、场景越接近真实工作环境。</li>
-            </ul>
-          </div>
+            <button
+              class="mt-5 w-full rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              :disabled="!canStartCustom || startingSceneId === 'custom'"
+              @click="startCustomScene()"
+            >
+              {{ startingSceneId === 'custom' ? '进入中...' : '开始自定义陪练' }}
+            </button>
+          </aside>
         </div>
       </div>
     </div>
@@ -232,105 +131,121 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import { SCENES } from '@/core/scenes'
 import { useAppStore } from '@/core/store'
 import type { Difficulty } from '@/core/types'
 import { ws } from '@/core/ws'
 import UserAccountBadge from '@/modules/auth/UserAccountBadge.vue'
 
-const store = useAppStore()
-const selectedDifficulty = ref<Difficulty>(1)
-const customBackground = ref('')
-const errorMessage = ref('')
+const emit = defineEmits<{
+  back: []
+}>()
 
-const difficultyOptions = [
+const store = useAppStore()
+const selectedDifficulty = ref<Difficulty>(store.difficulty)
+const customBackground = ref(store.customBackground)
+const startingSceneId = ref<string | null>(null)
+
+const difficultyOptions: Array<{ value: Difficulty; label: string; description: string }> = [
+  { value: 1, label: '入门', description: '短句更简单，节奏更慢。' },
+  { value: 2, label: '进阶', description: '更接近日常交流。' },
+  { value: 3, label: '困难', description: '追问更紧，表达更复杂。' },
+]
+
+const fixedScenes = [
   {
-    value: 1 as Difficulty,
-    label: '入门',
-    short: '1',
-    description: '句子更简单，推进节奏更慢，适合刚开始练习开口表达。',
+    id: 'interview',
+    title: '求职面试',
+    subtitle: 'Job Interview',
+    description: '练自我介绍、项目经历和追问应答。',
+    personaId: 'strict_interviewer',
+    icon: '💼',
+    iconClass: 'bg-sky-100',
   },
   {
-    value: 2 as Difficulty,
-    label: '进阶',
-    short: '2',
-    description: '更贴近日常工作交流，追问更自然，也更考验临场组织能力。',
+    id: 'restaurant',
+    title: '餐厅点餐',
+    subtitle: 'Restaurant Order',
+    description: '练点餐、偏好和补充说明。',
+    personaId: 'friendly_waiter',
+    icon: '🍽',
+    iconClass: 'bg-emerald-100',
   },
   {
-    value: 3 as Difficulty,
-    label: '困难',
-    short: '3',
-    description: '场景压力更强，表达更复杂，连续追问也会更密集。',
+    id: 'meeting',
+    title: '商务会议',
+    subtitle: 'Business Meeting',
+    description: '练表达观点、解释方案和推进讨论。',
+    personaId: 'colleague',
+    icon: '👥',
+    iconClass: 'bg-amber-100',
   },
 ]
 
-const difficultyLabel = computed(() => difficultyOptions.find((option) => option.value === selectedDifficulty.value)?.label ?? '入门')
-const currentDifficultyDescription = computed(
-  () => difficultyOptions.find((option) => option.value === selectedDifficulty.value)?.description ?? '',
-)
+const currentDifficultyLabel = computed(() => difficultyOptions.find((item) => item.value === selectedDifficulty.value)?.label ?? '入门')
+const difficultyHint = computed(() => difficultyOptions.find((item) => item.value === selectedDifficulty.value)?.description ?? '短句更简单，节奏更慢。')
 const canStartCustom = computed(() => customBackground.value.trim().length > 0)
 
-const fixedSceneCards = computed(() => ({
-  interview: {
-    ...SCENES.interview,
-    icon: '💼',
-    iconBg: 'bg-[linear-gradient(135deg,#dbeafe_0%,#c7d2fe_100%)]',
-    description: '模拟真实求职面试，练习自我介绍、项目讲述、追问回答和临场表达。',
-  },
-  restaurant: {
-    ...SCENES.restaurant,
-    icon: '🍔',
-    iconBg: 'bg-[linear-gradient(135deg,#dcfce7_0%,#fef9c3_100%)]',
-    description: '围绕点餐、偏好、加单和确认细节来练习更自然的生活口语。',
-  },
-  meeting: {
-    ...SCENES.meeting,
-    icon: '📳',
-    iconBg: 'bg-[linear-gradient(135deg,#fee2e2_0%,#fde68a_100%)]',
-    description: '模拟商务会议发言、提案解释、风险说明和方案讨论。',
-  },
-}))
-
-async function start(sceneId: string) {
-  errorMessage.value = ''
-
-  if (sceneId === 'custom' && !canStartCustom.value) {
-    errorMessage.value = '请先填写你的自定义场景背景。'
+async function connectAndStart(payload: {
+  sceneId: string
+  personaId: string
+  difficulty: Difficulty
+  customBackground?: string
+}) {
+  if (!store.authToken) {
+    store.phase = 'auth'
     return
   }
 
-  const scene = SCENES[sceneId]
-  if (!scene) {
-    errorMessage.value = '未找到对应场景，请刷新页面后重试。'
-    return
-  }
-
-  const personaId = Object.keys(scene.personas)[0]
-  const sessionId = crypto.randomUUID()
-  const normalizedBackground = sceneId === 'custom' ? customBackground.value.trim() : ''
-
-  store.startSession({
-    sessionId,
-    sceneId,
-    difficulty: selectedDifficulty.value,
-    personaId,
-    customBackground: normalizedBackground,
-  })
+  const newSessionId =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `session-${Date.now()}`
+  startingSceneId.value = payload.sceneId
 
   try {
-    await ws.connect(sessionId, store.authToken)
+    ws.disconnect()
+    await ws.connect(newSessionId, store.authToken)
+
+    store.startSession({
+      sessionId: newSessionId,
+      sceneId: payload.sceneId,
+      difficulty: payload.difficulty,
+      personaId: payload.personaId,
+      customBackground: payload.customBackground ?? '',
+    })
+
     ws.send({
       type: 'session.start',
-      session_id: sessionId,
-      scene_id: sceneId,
-      difficulty: selectedDifficulty.value,
-      persona_id: personaId,
-      custom_background: normalizedBackground || undefined,
+      session_id: newSessionId,
+      scene_id: payload.sceneId,
+      difficulty: payload.difficulty,
+      persona_id: payload.personaId,
+      custom_background: payload.customBackground,
       client_ts: Date.now(),
     })
-  } catch (error) {
-    errorMessage.value = '连接会话失败，请稍后重试。'
-    console.error('Failed to connect websocket', error)
+  } catch {
+    ws.disconnect()
+    store.phase = 'auth'
+  } finally {
+    startingSceneId.value = null
   }
+}
+
+async function startFixedScene(sceneId: string, personaId: string) {
+  await connectAndStart({
+    sceneId,
+    personaId,
+    difficulty: selectedDifficulty.value,
+  })
+}
+
+async function startCustomScene() {
+  if (!canStartCustom.value) return
+  await connectAndStart({
+    sceneId: 'custom',
+    personaId: 'adaptive_coach',
+    difficulty: selectedDifficulty.value,
+    customBackground: customBackground.value.trim(),
+  })
 }
 </script>

@@ -1,25 +1,25 @@
 <template>
   <div>
     <div>
-      <div class="text-lg font-semibold text-[var(--ink-2)]">Coach Panel</div>
-      <div class="mt-1 text-sm text-[var(--ink-3)]">实时纠错、表达优化和当前轮次陪练建议</div>
+      <div class="text-lg font-semibold text-[var(--ink-2)]">Coach</div>
+      <div class="mt-1 text-sm text-[var(--ink-3)]">纠错、优化和本轮建议</div>
     </div>
 
     <div class="mt-4 space-y-4">
       <div v-if="isAnalysingNextTurn" class="rounded-[16px] bg-indigo-50 px-4 py-4 text-sm text-indigo-700">
-        新一轮正在分析中，下面先保留上一轮纠错结果。
+        新一轮分析中，先保留上一轮结果。
       </div>
 
       <div v-if="isAnalysing" class="rounded-[16px] bg-indigo-50 px-4 py-4 text-sm text-indigo-700">
-        正在分析本轮发音和表达，请稍等片刻。
+        正在分析本轮表达。
       </div>
 
       <div v-else-if="!hasResult" class="rounded-[16px] bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_55%,#f8fafc_100%)] p-4">
         <div class="flex items-center justify-between gap-4">
           <div>
-            <div class="text-sm font-semibold text-[var(--ink-1)]">当前还没有纠错结果</div>
+            <div class="text-sm font-semibold text-[var(--ink-1)]">还没有结果</div>
             <p class="mt-2 text-sm leading-6 text-[var(--ink-3)]">
-              完成一轮对话后，这里会展示发音、语法、表达、用词和示例回答。
+              完成一轮对话后，这里会显示纠错和示例回答。
             </p>
           </div>
           <div class="flex h-14 w-14 items-center justify-center rounded-[16px] bg-white text-2xl">📋</div>
@@ -39,7 +39,7 @@
             </span>
           </div>
           <p v-else class="mt-3 text-sm leading-6 text-[var(--ink-3)]">
-            本轮暂未发现明显发音问题。
+            本轮发音整体正常。
           </p>
         </section>
 
@@ -82,7 +82,7 @@
         <section class="rounded-[14px] bg-[var(--surface-2)] px-4 py-4">
           <div class="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-600">Sample Answer</div>
           <p class="mt-3 text-sm leading-7 text-[var(--ink-2)]">
-            {{ sampleAnswer || '本轮表达整体清晰，可以继续保持。' }}
+            {{ sampleAnswer || '本轮表达整体清晰。' }}
           </p>
         </section>
       </template>
@@ -95,8 +95,10 @@ import { computed } from 'vue'
 
 import { useAppStore } from '@/core/store'
 import type { CorrectionIssue } from '@/core/types'
+import { useCoach } from './useCoach'
 
 const store = useAppStore()
+useCoach()
 
 const currentTurnStatus = computed(() => {
   if (!store.currentTurnId) return null
@@ -104,17 +106,13 @@ const currentTurnStatus = computed(() => {
 })
 
 const analyzedTurnId = computed(() => {
-  if (store.currentTurnId && currentTurnStatus.value === 'analyzed') {
-    return store.currentTurnId
-  }
+  if (store.currentTurnId && currentTurnStatus.value === 'analyzed') return store.currentTurnId
   return store.latestAnalyzedTurnId
 })
 
 const turnId = computed(() => analyzedTurnId.value ?? store.currentTurnId)
 const isAnalysing = computed(() => currentTurnStatus.value === 'pending' && !analyzedTurnId.value)
-const isAnalysingNextTurn = computed(
-  () => currentTurnStatus.value === 'pending' && !!analyzedTurnId.value && analyzedTurnId.value !== store.currentTurnId,
-)
+const isAnalysingNextTurn = computed(() => currentTurnStatus.value === 'pending' && !!analyzedTurnId.value && analyzedTurnId.value !== store.currentTurnId)
 const hasResult = computed(() => (turnId.value ? store.coachAnalysisStatus[turnId.value] === 'analyzed' : false))
 
 const corrections = computed<CorrectionIssue[]>(() => {
@@ -134,36 +132,13 @@ const pronunciationIssues = computed(() => {
 })
 
 const issueGroups = computed(() => [
-  {
-    category: 'grammar',
-    title: 'Grammar',
-    subtitle: '语法结构与句子正确性',
-    titleClass: 'text-rose-600',
-    emptyText: '本轮暂未发现明显语法问题。',
-    issues: filterIssues('grammar'),
-  },
-  {
-    category: 'expression',
-    title: 'Expression',
-    subtitle: '自然度、礼貌度和表达方式',
-    titleClass: 'text-amber-600',
-    emptyText: '本轮表达方式基本自然。',
-    issues: filterIssues('expression'),
-  },
-  {
-    category: 'vocabulary',
-    title: 'Vocabulary',
-    subtitle: '词汇选择与搭配',
-    titleClass: 'text-sky-600',
-    emptyText: '本轮暂未发现明显用词问题。',
-    issues: filterIssues('vocabulary'),
-  },
+  { category: 'grammar', title: 'Grammar', subtitle: '语法和句型', titleClass: 'text-rose-600', emptyText: '本轮没有明显语法问题。', issues: filterIssues('grammar') },
+  { category: 'expression', title: 'Expression', subtitle: '自然度和表达方式', titleClass: 'text-amber-600', emptyText: '本轮表达基本自然。', issues: filterIssues('expression') },
+  { category: 'vocabulary', title: 'Vocabulary', subtitle: '词汇和搭配', titleClass: 'text-sky-600', emptyText: '本轮没有明显用词问题。', issues: filterIssues('vocabulary') },
 ])
 
 function filterIssues(category: CorrectionIssue['category']) {
-  return corrections.value
-    .filter((issue) => issue.category === category)
-    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity))
+  return corrections.value.filter((issue) => issue.category === category).sort((a, b) => severityRank(b.severity) - severityRank(a.severity))
 }
 
 function severityRank(severity?: string): number {
@@ -171,7 +146,7 @@ function severityRank(severity?: string): number {
 }
 
 function severityLabel(severity?: string): string {
-  return severity === 'high' ? '重点修改' : severity === 'medium' ? '建议优化' : '轻微提示'
+  return severity === 'high' ? '重点' : severity === 'medium' ? '建议' : '提示'
 }
 
 function severityClass(severity?: string): string {

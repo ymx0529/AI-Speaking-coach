@@ -406,6 +406,7 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                 )
                 await websocket.send_json({"type": "turn_end", "turn_id": turn_id})
             elif msg_type in {"session_end", "session.finish"}:
+                end_session(session_id)
                 break
             else:
                 await websocket.send_json(
@@ -418,5 +419,4 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
     except WebSocketDisconnect:
         pass
     finally:
-        end_session(session_id)
         ws_hub.unregister(session_id)

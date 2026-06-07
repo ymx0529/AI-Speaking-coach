@@ -66,6 +66,13 @@ export function useCoach() {
   const store = useAppStore()
   ensureCoachSubscription(store)
 
+  const authHeaders = () =>
+    store.authToken
+      ? {
+          Authorization: `Bearer ${store.authToken}`,
+        }
+      : undefined
+
   async function fetchSummary(sessionId?: string): Promise<SessionSummaryResponse | null> {
     const id = sessionId ?? store.sessionId
     if (!id) return null
@@ -83,6 +90,10 @@ export function useCoach() {
 
       const res = await axios.post<SessionSummaryResponse>(
         `/api/sessions/${id}/summary`,
+        {},
+        {
+          headers: authHeaders(),
+        },
       )
       store.summary = res.data
       store.summaryReady = true

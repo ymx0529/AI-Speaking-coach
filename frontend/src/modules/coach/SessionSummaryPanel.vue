@@ -6,17 +6,15 @@
           <button class="text-sm font-medium text-slate-400 transition hover:text-slate-700" aria-label="返回首页" @click="restart()">
             返回首页
           </button>
-          <div class="mt-4 text-xs uppercase tracking-[0.18em] text-slate-400">After-Class Report</div>
-          <h2 class="mt-2 text-3xl font-semibold tracking-tight text-slate-950 lg:text-4xl">本次口语练习报告</h2>
-          <p class="mt-3 max-w-3xl text-sm leading-7 text-slate-500">
-            汇总整场对话的发音、语法、表达和词汇表现，帮你明确下一轮最该练什么。
-          </p>
+          <div class="mt-4 text-xs uppercase tracking-[0.18em] text-slate-400">Report</div>
+          <h2 class="mt-2 text-3xl font-semibold tracking-tight text-slate-950 lg:text-4xl">本次练习报告</h2>
+          <p class="mt-3 max-w-3xl text-sm leading-7 text-slate-500">看清这次表现，再决定下一轮怎么练。</p>
         </div>
         <div class="rounded-full bg-white px-4 py-2 text-xs font-semibold text-sky-700 shadow-sm">Session {{ sessionId }}</div>
       </header>
 
       <div v-if="store.summaryLoading" class="mt-8 rounded-[24px] bg-white px-6 py-10 text-center text-slate-500 shadow-sm">
-        正在生成课后报告...
+        正在生成报告...
       </div>
 
       <div v-else-if="errorMessage" class="mt-8 space-y-4">
@@ -43,10 +41,10 @@
                     {{ summary.ai_feedback }}
                   </p>
                   <div class="mt-5 flex flex-wrap gap-3 text-xs font-medium text-slate-500">
-                    <span class="rounded-full bg-slate-100 px-3 py-1">共 {{ summary.total_turns }} 轮对话</span>
-                    <span class="rounded-full bg-slate-100 px-3 py-1">累计纠错 {{ summary.corrections_count }} 条</span>
+                    <span class="rounded-full bg-slate-100 px-3 py-1">共 {{ summary.total_turns }} 轮</span>
+                    <span class="rounded-full bg-slate-100 px-3 py-1">纠错 {{ summary.corrections_count }} 条</span>
                     <span v-if="summary.avg_response_latency_ms != null" class="rounded-full bg-slate-100 px-3 py-1">
-                      平均响应 {{ Math.round(summary.avg_response_latency_ms) }} ms
+                      平均 {{ Math.round(summary.avg_response_latency_ms) }} ms
                     </span>
                   </div>
                 </div>
@@ -60,11 +58,7 @@
             </section>
 
             <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <div
-                v-for="card in scoreCards"
-                :key="card.label"
-                class="rounded-[22px] bg-white px-5 py-5 shadow-sm"
-              >
+              <div v-for="card in scoreCards" :key="card.label" class="rounded-[22px] bg-white px-5 py-5 shadow-sm">
                 <div class="text-xs uppercase tracking-[0.14em] text-slate-400">{{ card.label }}</div>
                 <div class="mt-3 text-3xl font-semibold text-slate-950">{{ card.value }}</div>
                 <div class="mt-1 text-xs text-slate-400">{{ card.unit }}</div>
@@ -77,11 +71,11 @@
             <section class="rounded-[28px] bg-white px-6 py-6 shadow-sm">
               <div class="flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <div class="text-sm font-semibold text-slate-900">能力诊断</div>
-                  <p class="mt-2 text-sm leading-7 text-slate-500">把本次表现拆成可练习的能力维度。</p>
+                  <div class="text-sm font-semibold text-slate-900">能力拆解</div>
+                  <p class="mt-2 text-sm leading-7 text-slate-500">按维度看分数。</p>
                 </div>
                 <div class="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-                  {{ abilityRows.length }} 项指标
+                  {{ abilityRows.length }} 项
                 </div>
               </div>
 
@@ -103,8 +97,8 @@
 
             <section class="grid gap-5 xl:grid-cols-2">
               <div class="rounded-[28px] bg-white px-6 py-6 shadow-sm">
-                <div class="text-sm font-semibold text-slate-900">高频发音弱点</div>
-                <p class="mt-2 text-sm leading-7 text-slate-500">优先复练这些低分词，提升会比泛泛朗读更快。</p>
+                <div class="text-sm font-semibold text-slate-900">重点发音</div>
+                <p class="mt-2 text-sm leading-7 text-slate-500">优先复练这些词。</p>
                 <div v-if="weakWords.length" class="mt-5 flex flex-wrap gap-2">
                   <span
                     v-for="word in weakWords"
@@ -116,13 +110,13 @@
                   </span>
                 </div>
                 <div v-else class="mt-5 rounded-[18px] bg-emerald-50 px-4 py-4 text-sm leading-7 text-emerald-700">
-                  本次没有明显低分发音词，可以继续挑战更长句表达。
+                  本次没有明显低分词。
                 </div>
               </div>
 
               <div class="rounded-[28px] bg-white px-6 py-6 shadow-sm">
-                <div class="text-sm font-semibold text-slate-900">表达问题分布</div>
-                <p class="mt-2 text-sm leading-7 text-slate-500">把语法、表达、词汇问题拆开看，方便下一轮定向练。</p>
+                <div class="text-sm font-semibold text-slate-900">问题分布</div>
+                <p class="mt-2 text-sm leading-7 text-slate-500">看看问题主要在哪一类。</p>
                 <div class="mt-5 space-y-3">
                   <div v-for="item in correctionBreakdown" :key="item.key">
                     <div class="flex items-center justify-between text-sm">
@@ -140,8 +134,8 @@
             <section class="rounded-[28px] bg-white px-6 py-6 shadow-sm">
               <div class="flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <div class="text-sm font-semibold text-slate-900">逐轮复盘</div>
-                  <p class="mt-2 text-sm leading-7 text-slate-500">每一轮都保留原句、优化表达和 AI 回复，方便回看上下文。</p>
+                  <div class="text-sm font-semibold text-slate-900">逐轮回看</div>
+                  <p class="mt-2 text-sm leading-7 text-slate-500">保留原句、推荐表达和 AI 回复。</p>
                 </div>
                 <div class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500">
                   {{ turnRows.length }} 轮
@@ -164,7 +158,7 @@
 
                   <div class="mt-4 grid gap-4 lg:grid-cols-2">
                     <div>
-                      <div class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">用户原句</div>
+                      <div class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">原句</div>
                       <p class="mt-2 text-sm leading-7 text-slate-700">{{ row.turn.user_text || '暂无文本' }}</p>
                     </div>
                     <div>
@@ -184,8 +178,8 @@
 
           <aside class="space-y-5">
             <section class="rounded-[28px] bg-slate-950 px-6 py-6 text-white shadow-[0_24px_60px_rgba(15,23,42,0.2)]">
-              <div class="text-xs uppercase tracking-[0.18em] text-sky-200/90">Next Practice</div>
-              <div class="mt-3 text-2xl font-semibold leading-snug">下一轮训练重点</div>
+              <div class="text-xs uppercase tracking-[0.18em] text-sky-200/90">Next</div>
+              <div class="mt-3 text-2xl font-semibold leading-snug">下一轮重点</div>
               <div class="mt-5 space-y-3">
                 <div
                   v-for="(recommendation, index) in nextPracticeItems"
@@ -205,8 +199,8 @@
             </section>
 
             <section class="rounded-[28px] bg-white px-6 py-6 shadow-sm">
-              <div class="text-sm font-semibold text-slate-900">可直接复用的升级表达</div>
-              <p class="mt-2 text-sm leading-7 text-slate-500">从你的原句里整理出来，下一次可以直接套用。</p>
+              <div class="text-sm font-semibold text-slate-900">升级表达</div>
+              <p class="mt-2 text-sm leading-7 text-slate-500">下次可直接复用。</p>
               <div class="mt-5 space-y-4">
                 <div
                   v-for="example in upgradedExamples"
@@ -215,7 +209,7 @@
                 >
                   <div class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">原句</div>
                   <p class="mt-2 text-sm leading-6 text-slate-600">{{ example.original }}</p>
-                  <div class="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-600">升级表达</div>
+                  <div class="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-600">更自然的说法</div>
                   <p class="mt-2 text-sm leading-6 text-slate-800">{{ example.improved }}</p>
                 </div>
               </div>
@@ -229,7 +223,7 @@
                   <span class="font-medium text-slate-800">{{ summary.scene_id }}</span>
                 </div>
                 <div class="flex justify-between gap-4">
-                  <span>总结状态</span>
+                  <span>状态</span>
                   <span class="font-medium text-slate-800">{{ store.summaryReady ? '已生成' : '未生成' }}</span>
                 </div>
                 <div class="flex justify-between gap-4">
@@ -243,7 +237,7 @@
       </template>
 
       <div v-else class="mt-8 rounded-[24px] bg-white px-6 py-10 text-center text-slate-400 shadow-sm">
-        暂无总结数据，请先完成至少一轮对话。
+        暂无总结数据，请先完成一轮对话。
       </div>
     </div>
   </section>
@@ -280,12 +274,12 @@ const scoreCards = computed(() => {
 const abilityRows = computed(() => {
   if (!summary.value) return []
   return [
-    abilityRow('发音准确度', summary.value.accuracy_avg, '单词发音是否清晰', 'bg-emerald-500'),
+    abilityRow('发音准确度', summary.value.accuracy_avg, '单词是否清楚', 'bg-emerald-500'),
     abilityRow('口语流利度', summary.value.fluency_avg, '停顿和连贯性', 'bg-indigo-500'),
-    abilityRow('表达完整度', summary.value.completeness_avg, '是否完整说出目标句', 'bg-amber-500'),
-    abilityRow('语法正确性', summary.value.grammar_score, '句子结构和时态', 'bg-rose-500'),
-    abilityRow('表达自然度', summary.value.expression_score, '礼貌度和地道程度', 'bg-sky-500'),
-    abilityRow('词汇选择', summary.value.vocabulary_score, '搭配和丰富度', 'bg-violet-500'),
+    abilityRow('表达完整度', summary.value.completeness_avg, '是否说完整', 'bg-amber-500'),
+    abilityRow('语法正确性', summary.value.grammar_score, '句型和时态', 'bg-rose-500'),
+    abilityRow('表达自然度', summary.value.expression_score, '是否自然得体', 'bg-sky-500'),
+    abilityRow('词汇选择', summary.value.vocabulary_score, '词汇和搭配', 'bg-violet-500'),
   ]
 })
 
@@ -300,9 +294,9 @@ const allCorrections = computed(() => {
 const correctionBreakdown = computed(() => {
   const total = Math.max(allCorrections.value.length, 1)
   return ([
-    ['grammar', '语法问题'],
-    ['expression', '表达问题'],
-    ['vocabulary', '词汇问题'],
+    ['grammar', '语法'],
+    ['expression', '表达'],
+    ['vocabulary', '词汇'],
   ] as const).map(([key, label]) => {
     const count = allCorrections.value.filter((issue) => issue.category === key).length
     return {
@@ -360,7 +354,7 @@ const upgradedExamples = computed(() => {
 
   return turnRows.value.slice(0, 2).map((row) => ({
     id: row.turn.turn_id,
-    original: row.turn.user_text || '本轮暂无用户文本',
+    original: row.turn.user_text || '暂无用户文本',
     improved: row.sampleAnswer,
   }))
 })
@@ -369,9 +363,9 @@ const nextPracticeItems = computed(() => {
   const base = summary.value?.focus_recommendations ?? []
   if (base.length) return base
   if (weakWords.value.length) {
-    return [`优先跟读 ${weakWords.value.slice(0, 3).map((item) => item.word).join('、')}，把低分词练到 80 分以上。`]
+    return [`优先复练 ${weakWords.value.slice(0, 3).map((item) => item.word).join('、')}。`]
   }
-  return ['保持当前表达节奏，下一轮尝试使用更完整的句子回答。']
+  return ['下一轮试着用更完整的句子回答。']
 })
 
 function scoreCard(label: string, value: number, unit: string, barClass: string) {
@@ -401,10 +395,10 @@ function scorePercent(value: number) {
 }
 
 function scoreLevel(score: number) {
-  if (score >= 85) return '表现优秀，继续提高表达复杂度'
-  if (score >= 70) return '整体稳定，适合定向打磨弱点'
-  if (score >= 60) return '基础可用，需要加强清晰度'
-  return '建议先做短句跟读和慢速表达'
+  if (score >= 85) return '表现优秀'
+  if (score >= 70) return '整体稳定'
+  if (score >= 60) return '基础可用'
+  return '建议先做短句练习'
 }
 
 function isReportableWeakWord(word: WordScore) {
@@ -432,7 +426,7 @@ async function loadSummary() {
   store.resetSummaryState()
   const result = await fetchSummary(props.sessionId)
   if (!result) {
-    errorMessage.value = '总结获取失败，请确认后端已启动并至少完成一轮对话。'
+    errorMessage.value = '获取总结失败，请确认后端已启动。'
   }
 }
 
