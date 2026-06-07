@@ -12,6 +12,18 @@ export type ErrorCode =
   | 'CORRECTION_FAILED'
   | 'SUMMARY_NOT_READY'
 
+export interface AuthUser {
+  id: string
+  name: string
+  email: string
+  created_at: string
+}
+
+export interface AuthResponse {
+  token: string
+  user: AuthUser
+}
+
 export interface WordScore {
   word: string
   accuracy_score: number
@@ -264,4 +276,3 @@ export type LegacyServerMsg =
   | { type: 'error'; code: string; message: string; retryable?: boolean }
 
 export type ServerMsg = CanonicalServerMsg | LegacyServerMsg
-

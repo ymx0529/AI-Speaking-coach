@@ -8,7 +8,8 @@
               <div class="text-xs uppercase tracking-[0.16em] text-slate-400">Conversation Scaffold</div>
               <h2 class="mt-2 text-3xl font-semibold capitalize text-slate-900">{{ store.sceneId }}</h2>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center justify-end gap-3">
+              <UserAccountBadge />
               <div class="rounded-full bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-600">
                 {{ store.sessionReady ? '对话已连接' : '准备中' }}
               </div>
@@ -119,6 +120,7 @@ import { computed, onMounted, onUnmounted } from 'vue'
 
 import { useAppStore } from '@/core/store'
 import { ws } from '@/core/ws'
+import UserAccountBadge from '@/modules/auth/UserAccountBadge.vue'
 
 import PronScoreBar from './PronScoreBar.vue'
 import { useConversation } from './useConversation'
