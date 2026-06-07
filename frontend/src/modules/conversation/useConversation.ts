@@ -9,6 +9,7 @@ const SCENE_SAMPLES: Record<string, [string, string]> = {
   interview: ['Hello, I would like', ' to introduce myself.'],
   restaurant: ['I would like to order', ' a pasta and water.'],
   meeting: ['I think we should', ' increase the budget.'],
+  custom: ['I need to explain', ' a difficult situation clearly.'],
 }
 
 function encodeChunk(text: string) {
@@ -98,6 +99,7 @@ export function useConversation() {
     sentBytes: 0,
     lastEncoding: '',
   })
+
   const recordingSupported =
     typeof navigator !== 'undefined' &&
     !!navigator.mediaDevices?.getUserMedia &&
@@ -233,14 +235,20 @@ export function useConversation() {
     } else if (msg.type === 'turn.started') {
       stopAssistantAudioPlayback()
       store.currentTurnId = msg.turn_id
+      store.setUserMessage(msg.turn_id, '', 'streaming')
     } else if (msg.type === 'asr.partial' || msg.type === 'asr_partial') {
       store.asrText = msg.text
+      if ('turn_id' in msg) {
+        store.setUserMessage(msg.turn_id, msg.text, 'streaming')
+      }
     } else if (msg.type === 'user_turn.final' || msg.type === 'asr_final') {
       store.currentTurnId = msg.turn_id
       store.asrText = msg.text
+      store.setUserMessage(msg.turn_id, msg.text, 'final')
     } else if (msg.type === 'assistant.reply_text' || msg.type === 'reply_text') {
       store.aiReplyText = msg.text
       store.isReplyAudioPending = true
+      store.setAssistantMessage(msg.turn_id, msg.text)
     } else if (msg.type === 'assistant.reply_audio') {
       queueAssistantAudio(msg.data, msg.audio_format, msg.turn_id, true)
     } else if (msg.type === 'assistant.reply_audio_start') {
@@ -416,11 +424,9 @@ export function useConversation() {
     }
 
     try {
-      const response = await axios.get<SessionStatusResponse>(
-        `http://localhost:8000/api/sessions/${store.sessionId}/status`
-      )
+      const response = await axios.get<SessionStatusResponse>(`http://localhost:8000/api/sessions/${store.sessionId}/status`)
       if (response.data.state !== 'finished') {
-        errorMessage.value = '会话结束状态未同步完成，请稍后再试。'
+        errorMessage.value = '会话结束状态尚未同步完成，请稍后再试。'
         return
       }
     } catch {

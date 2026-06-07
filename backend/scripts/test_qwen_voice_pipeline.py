@@ -14,6 +14,7 @@ def main() -> int:
     parser.add_argument("--scene", default="interview", help="Scene id, e.g. interview/restaurant/meeting.")
     parser.add_argument("--persona", default="strict_interviewer", help="Persona id for the scene.")
     parser.add_argument("--difficulty", type=int, default=1, help="Difficulty level.")
+    parser.add_argument("--background", default="", help="Optional custom scenario background.")
     parser.add_argument(
         "--save-reply-audio",
         action="store_true",
@@ -29,6 +30,7 @@ def main() -> int:
         scene_id=args.scene,
         persona_id=args.persona,
         difficulty=args.difficulty,
+        custom_background=args.background or None,
         history=[],
         user_text=transcript,
     )

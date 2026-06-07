@@ -33,7 +33,12 @@ async def assess(transcript: str, wav_audio_b64: str | None) -> PronScore | None
 
     if provider in {"auto", "xfyun"} and _has_xfyun_credentials():
         try:
-            return await asyncio.to_thread(_run_xfyun_ise, transcript, wav_audio_b64)
+            result = await asyncio.to_thread(_run_xfyun_ise, transcript, wav_audio_b64)
+            if result is not None:
+                return result
+            logger.warning("Xfyun ISE returned no pronunciation result")
+            if provider == "xfyun":
+                return None
         except Exception as exc:
             logger.error("Xfyun ISE pronunciation assessment failed: %s", exc)
             if provider == "xfyun":

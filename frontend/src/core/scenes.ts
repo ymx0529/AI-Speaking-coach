@@ -20,5 +20,9 @@ export const SCENES: Record<string, SceneConfig> = {
     name_zh: '商务会议',
     personas: { colleague: { name: 'Jordan' } },
   },
+  custom: {
+    name: 'Custom Scenario',
+    name_zh: '自定义场景',
+    personas: { adaptive_coach: { name: 'Coach' } },
+  },
 }
-

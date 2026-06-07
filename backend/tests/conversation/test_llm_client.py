@@ -40,6 +40,7 @@ def test_build_reply_prompt_uses_scene_persona_and_difficulty():
         scene_id="interview",
         persona_id="strict_interviewer",
         difficulty=2,
+        custom_background=None,
         history=[],
         user_text="I have five years of backend experience.",
     )
@@ -50,6 +51,24 @@ def test_build_reply_prompt_uses_scene_persona_and_difficulty():
     assert prompt["messages"][-1]["content"] == "I have five years of backend experience."
 
 
+def test_build_reply_prompt_uses_custom_background_for_custom_scene():
+    prompt = build_reply_prompt(
+        scene_id="custom",
+        persona_id="adaptive_coach",
+        difficulty=3,
+        custom_background="The learner needs to explain a delayed project to a demanding client.",
+        history=[],
+        user_text="I want to explain the delay clearly.",
+    )
+
+    system_prompt = prompt["messages"][0]["content"].lower()
+    assert prompt["scene_name"] == "Custom Scenario"
+    assert prompt["persona_name"] == "Coach"
+    assert "learner-provided scenario background" in system_prompt
+    assert "demanding client" in system_prompt
+    assert "advanced" in system_prompt
+
+
 def test_generate_reply_calls_qwen_chat_model(monkeypatch):
     fake_client = _FakeClient()
     monkeypatch.setattr("app.modules.conversation.llm_client._get_client", lambda: fake_client)
@@ -58,6 +77,7 @@ def test_generate_reply_calls_qwen_chat_model(monkeypatch):
         scene_id="meeting",
         persona_id="colleague",
         difficulty=1,
+        custom_background=None,
         history=[],
         user_text="I think we should launch next month.",
     )
@@ -81,6 +101,7 @@ def test_generate_reply_falls_back_when_qwen_fails(monkeypatch):
         scene_id="restaurant",
         persona_id="friendly_waiter",
         difficulty=1,
+        custom_background=None,
         history=[],
         user_text="I would like some water.",
     )

@@ -158,6 +158,55 @@ def test_audio_append_publishes_turn_transcript_ready_event_once(monkeypatch):
     assert event.turn_duration_ms > 0
 
 
+def test_session_start_keeps_custom_background_for_reply_generation(monkeypatch):
+    generate_calls: list[dict] = []
+
+    def fake_generate_reply(**kwargs):
+        generate_calls.append(kwargs)
+        return "Coach: Let's practice this situation."
+
+    monkeypatch.setattr(event_bus, "publish", AsyncMock())
+    monkeypatch.setattr("app.modules.conversation.router.generate_reply", fake_generate_reply)
+    monkeypatch.setattr(
+        "app.modules.conversation.router.synthesize_reply_audio",
+        lambda text: (_b64("audio"), "wav_pcm16"),
+    )
+    client = TestClient(app)
+
+    with client.websocket_connect("/ws/session/realtime-custom") as websocket:
+        websocket.send_json(
+            {
+                "type": "session.start",
+                "session_id": "realtime-custom",
+                "scene_id": "custom",
+                "difficulty": 3,
+                "persona_id": "adaptive_coach",
+                "custom_background": "The learner must explain a project delay to a demanding client.",
+                "client_ts": 100,
+            }
+        )
+        websocket.receive_json()
+
+        websocket.send_json(
+            {
+                "type": "audio.append",
+                "session_id": "realtime-custom",
+                "turn_id": None,
+                "seq": 0,
+                "encoding": "webm_opus",
+                "chunk": _b64("I need to explain why the timeline changed."),
+                "is_last": True,
+                "client_ts": 200,
+            }
+        )
+        _receive_until(websocket, "assistant.reply_text")
+
+    assert generate_calls
+    assert generate_calls[0]["scene_id"] == "custom"
+    assert generate_calls[0]["difficulty"] == 3
+    assert generate_calls[0]["custom_background"] == "The learner must explain a project delay to a demanding client."
+
+
 def test_audio_append_publishes_analysis_before_tts(monkeypatch):
     order: list[str] = []
 

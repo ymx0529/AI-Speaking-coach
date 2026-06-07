@@ -2,15 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-app:
+    radial-gradient(circle at top, rgba(125, 211, 252, 0.32), transparent 32%),
+    linear-gradient(180deg, #f7fbff 0%, #eef4ff 48%, #e8eef8 100%);
+  --surface-0: rgba(255, 255, 255, 0.88);
+  --surface-1: rgba(255, 255, 255, 0.92);
+  --surface-2: #f8fbff;
+  --surface-3: #f8fafc;
+  --surface-accent: #eef6ff;
+  --ink-1: #020617;
+  --ink-2: #0f172a;
+  --ink-3: #475569;
+  --ink-4: #94a3b8;
+  --line-soft: rgba(226, 232, 240, 0.88);
+  --line-strong: rgba(203, 213, 225, 0.92);
+  --brand-500: #2563eb;
+  --brand-400: #38bdf8;
+  --brand-50: #eff6ff;
+  --success-50: #ecfdf5;
+  --success-600: #059669;
+  --warn-50: #fffbeb;
+  --warn-600: #d97706;
+  --danger-50: #fff1f2;
+  --danger-600: #be123c;
+  --shadow-soft: 0 24px 70px rgba(15, 23, 42, 0.06);
+  --shadow-strong: 0 36px 120px rgba(15, 23, 42, 0.1);
+}
+
 html {
-  background: #eef4ff;
+  background: var(--bg-app);
 }
 
 body {
-  @apply bg-slate-100 text-slate-900 antialiased;
+  @apply bg-transparent text-slate-900 antialiased;
   font-family:
-    Inter,
+    "Avenir Next",
+    "Segoe UI",
     "PingFang SC",
+    "Hiragino Sans GB",
     "Microsoft YaHei",
     "Helvetica Neue",
     Arial,

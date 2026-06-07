@@ -164,6 +164,7 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                     scene_id=payload.get("scene_id", "interview"),
                     difficulty=payload.get("difficulty", 1),
                     persona_id=payload.get("persona_id", "strict_interviewer"),
+                    custom_background=payload.get("custom_background"),
                 )
                 if msg_type == "session.start":
                     await websocket.send_json(
@@ -262,6 +263,7 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                         scene_id=session.scene_id,
                         persona_id=session.persona_id,
                         difficulty=session.difficulty,
+                        custom_background=session.custom_background,
                         history=session.history,
                         user_text=final_text,
                     )
@@ -287,6 +289,7 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                             scene_id=session.scene_id,
                             difficulty=session.difficulty,
                             persona_id=session.persona_id,
+                            custom_background=session.custom_background,
                             transcript=final_text,
                             audio_format="wav_pcm16",
                             audio_b64=b64encode(merged_audio_bytes).decode("utf-8"),
@@ -326,6 +329,7 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                     scene_id=session.scene_id,
                     persona_id=session.persona_id,
                     difficulty=session.difficulty,
+                    custom_background=session.custom_background,
                     history=session.history,
                     user_text=user_text,
                 )

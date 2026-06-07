@@ -24,6 +24,7 @@ def test_turn_transcript_ready_event_contains_required_handoff_fields():
         scene_id="interview",
         difficulty=2,
         persona_id="strict_interviewer",
+        custom_background="The learner is introducing a delayed launch plan.",
         transcript="I would like to introduce myself.",
         audio_format="wav_pcm16",
         audio_b64="ZmFrZV9hdWRpbw==",
@@ -43,6 +44,7 @@ def test_canonical_ws_message_models_match_v2_contract():
         scene_id="meeting",
         difficulty=1,
         persona_id="colleague",
+        custom_background="The learner wants to propose a new marketing plan.",
         client_ts=1717651200000,
     )
     audio_append = AudioAppendMessage(
@@ -98,6 +100,7 @@ def test_canonical_ws_message_models_match_v2_contract():
     )
 
     assert session_start.type == "session.start"
+    assert session_start.custom_background == "The learner wants to propose a new marketing plan."
     assert audio_append.encoding == "webm_opus"
     assert session_ready.type == "session.ready"
     assert turn_started.type == "turn.started"

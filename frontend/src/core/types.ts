@@ -34,6 +34,14 @@ export interface CorrectionIssue {
   severity: 'high' | 'medium' | 'low'
 }
 
+export interface ConversationMessage {
+  id: string
+  turnId: string | null
+  role: 'user' | 'assistant' | 'system'
+  text: string
+  state: 'streaming' | 'final'
+}
+
 /** Dev A → Dev B via backend EventBus (see PROTOCOL.md) */
 export interface TurnTranscriptReadyEvent {
   session_id: string
@@ -100,6 +108,7 @@ export interface SessionStartMessage {
   scene_id: string
   difficulty: Difficulty
   persona_id: string
+  custom_background?: string
   client_ts: number
 }
 
@@ -230,7 +239,7 @@ export type LegacyClientMsg =
   | { type: 'audio_end'; seq_count: number }
   | { type: 'session_end' }
   // v2
-  | { type: 'session.start'; session_id: string; scene_id: string; difficulty: Difficulty; persona_id: string; client_ts: number }
+  | { type: 'session.start'; session_id: string; scene_id: string; difficulty: Difficulty; persona_id: string; custom_background?: string; client_ts: number }
   | { type: 'audio.append'; session_id: string; turn_id: string | null; seq: number; encoding: string; chunk: string; is_last: boolean; client_ts: number }
   | { type: 'session.finish'; session_id: string }
 

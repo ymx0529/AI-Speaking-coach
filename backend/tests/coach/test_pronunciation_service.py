@@ -95,6 +95,26 @@ async def test_assess_prefers_xfyun_when_configured(monkeypatch):
     assert result == expected
 
 
+async def test_assess_auto_falls_back_to_azure_when_xfyun_returns_none(monkeypatch):
+    expected = PronScore(overall=76, accuracy=74, fluency=80, completeness=82)
+
+    async def fake_to_thread(func, *args):
+        return func(*args)
+
+    monkeypatch.setattr("app.modules.coach.pronunciation_service.settings.pronunciation_provider", "auto")
+    monkeypatch.setattr("app.modules.coach.pronunciation_service.settings.xfyun_app_id", "app")
+    monkeypatch.setattr("app.modules.coach.pronunciation_service.settings.xfyun_api_key", "key")
+    monkeypatch.setattr("app.modules.coach.pronunciation_service.settings.xfyun_api_secret", "secret")
+    monkeypatch.setattr("app.modules.coach.pronunciation_service.settings.azure_speech_key", "fake-key")
+    monkeypatch.setattr("app.modules.coach.pronunciation_service.asyncio.to_thread", fake_to_thread)
+    monkeypatch.setattr("app.modules.coach.pronunciation_service._run_xfyun_ise", lambda *_: None)
+    monkeypatch.setattr("app.modules.coach.pronunciation_service._run_azure", lambda *_: expected)
+
+    result = await pronunciation_service.assess("Hello", _wav_b64())
+
+    assert result == expected
+
+
 def test_xfyun_ise_stream_result_maps_to_pron_score(monkeypatch):
     pcm = b"\x01\x00" * 1600
     xml = """

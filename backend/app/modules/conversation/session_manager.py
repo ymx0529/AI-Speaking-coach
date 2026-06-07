@@ -28,6 +28,7 @@ class SessionState:
     scene_id: str
     difficulty: int
     persona_id: str
+    custom_background: str | None = None
     history: list[dict[str, str]] = field(default_factory=list)
     turns: list[TurnRecord] = field(default_factory=list)
     turn_count: int = 0
@@ -44,12 +45,19 @@ class SessionState:
 _sessions: dict[str, SessionState] = {}
 
 
-def start_session(session_id: str, scene_id: str, difficulty: int, persona_id: str) -> None:
+def start_session(
+    session_id: str,
+    scene_id: str,
+    difficulty: int,
+    persona_id: str,
+    custom_background: str | None = None,
+) -> None:
     _sessions[session_id] = SessionState(
         session_id=session_id,
         scene_id=scene_id,
         difficulty=difficulty,
         persona_id=persona_id,
+        custom_background=custom_background,
     )
 
 

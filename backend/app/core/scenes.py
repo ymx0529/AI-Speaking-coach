@@ -49,4 +49,20 @@ SCENES: dict[str, dict] = {
             }
         },
     },
+    "custom": {
+        "name": "Custom Scenario",
+        "name_zh": "自定义场景",
+        "opening": "Please begin the role-play based on the learner's background.",
+        "personas": {
+            "adaptive_coach": {
+                "name": "Coach",
+                "system_prompt": (
+                    "You are an adaptive English speaking partner and coach. "
+                    "Use the learner-provided background to role-play a realistic conversation partner. "
+                    "Ask short, scenario-consistent follow-up questions, speak only English, and keep each reply under 40 words. "
+                    "Difficulty level: {difficulty}."
+                ),
+            }
+        },
+    },
 }

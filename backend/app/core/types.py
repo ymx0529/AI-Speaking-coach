@@ -68,6 +68,7 @@ class TurnTranscriptReadyEvent(BaseModel):
     scene_id: str
     difficulty: Difficulty
     persona_id: str
+    custom_background: str | None = None
     transcript: str
     audio_format: Literal["wav_pcm16"] = "wav_pcm16"
     audio_b64: str | None = None  # None when v1 SpeakerTurnEvent is converted
@@ -118,6 +119,7 @@ class SessionStartMessage(BaseModel):
     scene_id: str
     difficulty: Difficulty
     persona_id: str
+    custom_background: str | None = None
     client_ts: int
 
 
