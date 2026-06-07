@@ -109,6 +109,49 @@ class SessionSummaryResponse(BaseModel):
     turns: list[TurnRecord] = Field(default_factory=list)
 
 
+class ShadowingItem(BaseModel):
+    id: str
+    text: str
+    source_turn_id: str | None = None
+    source: Literal["sample_answer", "user_sentence"] = "sample_answer"
+    focus_words: list[str] = Field(default_factory=list)
+    note: str = ""
+
+
+class ShadowingItemsResponse(BaseModel):
+    session_id: str
+    items: list[ShadowingItem] = Field(default_factory=list)
+
+
+class ShadowingTtsRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=240)
+
+
+class ShadowingTtsResponse(BaseModel):
+    audio_format: AudioFormat = "wav_pcm16"
+    data: str
+
+
+class ShadowingAssessRequest(BaseModel):
+    item_id: str = ""
+    text: str = Field(min_length=1, max_length=240)
+    audio_b64: str = Field(min_length=1)
+    audio_format: Literal["wav_pcm16"] = "wav_pcm16"
+
+
+class ShadowingAssessmentResponse(BaseModel):
+    item_id: str = ""
+    target_text: str
+    pronunciation: PronScore | None = None
+    similarity_score: float
+    stress_score: float
+    intonation_score: float
+    liaison_score: float
+    pause_score: float
+    weak_words: list[WordScore] = Field(default_factory=list)
+    tips: list[str] = Field(default_factory=list)
+
+
 class SessionStatusResponse(BaseModel):
     session_id: str
     state: Literal["active", "finished"]

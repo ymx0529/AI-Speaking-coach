@@ -105,6 +105,38 @@ export interface SessionSummaryResponse {
   turns: TurnRecord[]
 }
 
+export interface ShadowingItem {
+  id: string
+  text: string
+  source_turn_id?: string | null
+  source: 'sample_answer' | 'user_sentence'
+  focus_words: string[]
+  note: string
+}
+
+export interface ShadowingItemsResponse {
+  session_id: string
+  items: ShadowingItem[]
+}
+
+export interface ShadowingTtsResponse {
+  audio_format: AudioFormat
+  data: string
+}
+
+export interface ShadowingAssessmentResponse {
+  item_id: string
+  target_text: string
+  pronunciation?: PronScore | null
+  similarity_score: number
+  stress_score: number
+  intonation_score: number
+  liaison_score: number
+  pause_score: number
+  weak_words: WordScore[]
+  tips: string[]
+}
+
 export interface SessionStatusResponse {
   session_id: string
   state: 'active' | 'finished'
