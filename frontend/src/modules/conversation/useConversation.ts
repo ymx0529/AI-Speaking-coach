@@ -485,7 +485,7 @@ export function useConversation() {
     }
 
     try {
-      const response = await axios.get<SessionStatusResponse>(`http://localhost:8000/api/sessions/${store.sessionId}/status`)
+      const response = await axios.get<SessionStatusResponse>(`/api/sessions/${store.sessionId}/status`)
       if (response.data.state !== 'finished') {
         errorMessage.value = '会话结束状态尚未同步完成，请稍后再试。'
         return
