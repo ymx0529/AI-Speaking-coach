@@ -61,17 +61,16 @@
         <section class="relative z-10 flex min-h-0 flex-col justify-center">
           <div>
             <div
-              class="inline-flex rounded-full bg-blue-50 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-600"
+              class="inline-flex rounded-full bg-blue-50 px-5 py-2 text-[12px] font-semibold uppercase tracking-[0.24em] text-blue-600"
             >
               English Speaking Coach
             </div>
 
             <h1
-              class="mt-3 max-w-[15ch] text-[2.72rem] font-semibold leading-[1.03] tracking-[-0.045em] text-slate-950 xl:text-[3.18rem]"
+              class="mt-3 w-fit text-[2.15rem] font-semibold leading-[1.08] tracking-[-0.04em] text-slate-950 xl:text-[2.5rem]"
             >
-              用真实场景练开口，
-              <br />
-              <span class="text-[#3b82f6]">让英语对话更自然。</span>
+              <span class="block whitespace-nowrap">用真实场景练开口，</span>
+              <span class="block whitespace-nowrap text-[#3b82f6]">让英语对话更自然。</span>
             </h1>
 
             <p class="mt-4 max-w-[31rem] text-[14px] leading-7 text-slate-600">
