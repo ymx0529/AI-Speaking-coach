@@ -1,0 +1,15 @@
+# SpeakCoach backend runtime dependencies
+fastapi>=0.111
+uvicorn[standard]>=0.29
+pydantic>=2.0
+pydantic-settings>=2.0
+python-dotenv>=1.0
+python-multipart>=0.0.9
+azure-cognitiveservices-speech>=1.38
+xfyunsdkspeech>=0.0.4
+openai>=1.52.0
+pydub>=0.25
+
+# Test dependencies
+pytest>=8.0
+pytest-asyncio>=0.23
