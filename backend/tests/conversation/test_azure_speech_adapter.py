@@ -9,12 +9,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from app.modules.conversation.azure_speech import split_reply_for_tts, synthesize_reply_audio
 
 
-def test_split_reply_for_tts_uses_sentence_boundaries():
+def test_split_reply_for_tts_packs_short_sentences():
     segments = split_reply_for_tts("Sure, I can help. What kind of role are you applying for?")
 
     assert segments == [
-        "Sure, I can help.",
-        "What kind of role are you applying for?",
+        "Sure, I can help. What kind of role are you applying for?",
     ]
 
 

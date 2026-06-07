@@ -27,6 +27,9 @@ interface QueuedAssistantAudio {
   format?: string
 }
 
+const ASSISTANT_AUDIO_MIN_BUFFER_CHUNKS = 2
+const ASSISTANT_AUDIO_MAX_INITIAL_BUFFER_WAIT_MS = 300
+
 async function blobToBase64(blob: Blob): Promise<string> {
   const buffer = await blob.arrayBuffer()
   const bytes = new Uint8Array(buffer)
@@ -115,13 +118,25 @@ export function useConversation() {
   let assistantAudioQueue: QueuedAssistantAudio[] = []
   let activeAssistantAudio: HTMLAudioElement | null = null
   let activeAudioStreamTurnId: string | null = null
+  let assistantAudioExpectedChunks: number | null = null
+  let assistantAudioReceivedChunks = 0
+  let assistantAudioBufferTimer: number | null = null
+  let assistantAudioPlaybackStarted = false
   let audioStreamEnded = false
 
   function isCurrentAudioTurn(turnId?: string | null) {
     return !turnId || !store.currentTurnId || store.currentTurnId === turnId
   }
 
+  function clearAssistantAudioBufferTimer() {
+    if (assistantAudioBufferTimer !== null) {
+      window.clearTimeout(assistantAudioBufferTimer)
+      assistantAudioBufferTimer = null
+    }
+  }
+
   function stopAssistantAudioPlayback() {
+    clearAssistantAudioBufferTimer()
     if (activeAssistantAudio) {
       activeAssistantAudio.pause()
       activeAssistantAudio.src = ''
@@ -129,30 +144,65 @@ export function useConversation() {
     activeAssistantAudio = null
     assistantAudioQueue = []
     activeAudioStreamTurnId = null
+    assistantAudioExpectedChunks = null
+    assistantAudioReceivedChunks = 0
+    assistantAudioPlaybackStarted = false
     audioStreamEnded = false
     store.isSpeaking = false
     store.isReplyAudioPending = false
   }
 
-  function startAssistantAudioStream(turnId: string) {
+  function startAssistantAudioStream(turnId: string, totalChunks?: number) {
     if (!isCurrentAudioTurn(turnId)) return
 
     if (activeAudioStreamTurnId !== turnId) {
       stopAssistantAudioPlayback()
       activeAudioStreamTurnId = turnId
+      assistantAudioReceivedChunks = 0
       audioStreamEnded = false
+    }
+    if (typeof totalChunks === 'number' && totalChunks > 0) {
+      assistantAudioExpectedChunks = totalChunks
     }
     store.isReplyAudioPending = true
   }
 
+  function hasEnoughAssistantAudioBuffer() {
+    if (assistantAudioQueue.length === 0) return false
+    if (audioStreamEnded) return true
+    if (assistantAudioExpectedChunks !== null && assistantAudioReceivedChunks >= assistantAudioExpectedChunks) {
+      return true
+    }
+
+    const expectedBuffer = Math.min(
+      ASSISTANT_AUDIO_MIN_BUFFER_CHUNKS,
+      assistantAudioExpectedChunks ?? ASSISTANT_AUDIO_MIN_BUFFER_CHUNKS,
+    )
+    return assistantAudioQueue.length >= expectedBuffer
+  }
+
   function finishAssistantAudioIfIdle() {
     if (assistantAudioQueue.length > 0) {
-      playNextAssistantAudio()
+      playNextAssistantAudio(true)
       return
     }
 
     store.isSpeaking = false
     store.isReplyAudioPending = !!activeAudioStreamTurnId && !audioStreamEnded
+  }
+
+  function scheduleAssistantAudioPlayback() {
+    if (activeAssistantAudio || assistantAudioQueue.length === 0) return
+    if (assistantAudioPlaybackStarted || hasEnoughAssistantAudioBuffer()) {
+      playNextAssistantAudio(true)
+      return
+    }
+    if (assistantAudioBufferTimer !== null) return
+
+    assistantAudioBufferTimer = window.setTimeout(() => {
+      assistantAudioBufferTimer = null
+      playNextAssistantAudio(true)
+    }, ASSISTANT_AUDIO_MAX_INITIAL_BUFFER_WAIT_MS)
   }
 
   function cleanupMediaStream() {
@@ -172,8 +222,15 @@ export function useConversation() {
     recordedChunks = []
   }
 
-  function playNextAssistantAudio() {
+  function playNextAssistantAudio(force = false) {
     if (activeAssistantAudio || assistantAudioQueue.length === 0) return
+    if (!force && !assistantAudioPlaybackStarted && !hasEnoughAssistantAudioBuffer()) {
+      store.isSpeaking = false
+      store.isReplyAudioPending = true
+      scheduleAssistantAudioPlayback()
+      return
+    }
+    clearAssistantAudioBufferTimer()
 
     const nextAudio = assistantAudioQueue.shift()
     if (!nextAudio) return
@@ -185,6 +242,7 @@ export function useConversation() {
     try {
       store.isReplyAudioPending = false
       store.isSpeaking = true
+      assistantAudioPlaybackStarted = true
       const audio = new Audio(`data:${getAudioMimeType(nextAudio.format)};base64,${nextAudio.data}`)
       activeAssistantAudio = audio
       const finishAudio = () => {
@@ -214,8 +272,9 @@ export function useConversation() {
     if (turnId && endsStream && activeAudioStreamTurnId === turnId) {
       audioStreamEnded = true
     }
+    assistantAudioReceivedChunks += 1
     assistantAudioQueue.push({ turnId: turnId ?? null, data, format })
-    playNextAssistantAudio()
+    scheduleAssistantAudioPlayback()
   }
 
   function endAssistantAudioStream(turnId: string) {
@@ -223,7 +282,9 @@ export function useConversation() {
     if (activeAudioStreamTurnId === turnId) {
       audioStreamEnded = true
     }
-    if (!activeAssistantAudio && assistantAudioQueue.length === 0) {
+    if (!activeAssistantAudio && assistantAudioQueue.length > 0) {
+      playNextAssistantAudio(true)
+    } else if (!activeAssistantAudio && assistantAudioQueue.length === 0) {
       store.isSpeaking = false
       store.isReplyAudioPending = false
     }
@@ -252,7 +313,7 @@ export function useConversation() {
     } else if (msg.type === 'assistant.reply_audio') {
       queueAssistantAudio(msg.data, msg.audio_format, msg.turn_id, true)
     } else if (msg.type === 'assistant.reply_audio_start') {
-      startAssistantAudioStream(msg.turn_id)
+      startAssistantAudioStream(msg.turn_id, msg.total_chunks)
     } else if (msg.type === 'assistant.reply_audio_chunk') {
       queueAssistantAudio(msg.data, msg.audio_format, msg.turn_id)
     } else if (msg.type === 'assistant.reply_audio_end') {
@@ -424,7 +485,7 @@ export function useConversation() {
     }
 
     try {
-      const response = await axios.get<SessionStatusResponse>(`http://localhost:8000/api/sessions/${store.sessionId}/status`)
+      const response = await axios.get<SessionStatusResponse>(`/api/sessions/${store.sessionId}/status`)
       if (response.data.state !== 'finished') {
         errorMessage.value = '会话结束状态尚未同步完成，请稍后再试。'
         return

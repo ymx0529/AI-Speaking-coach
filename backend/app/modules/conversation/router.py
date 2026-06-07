@@ -21,6 +21,7 @@ from app.core.types import (
     WordScore,
 )
 from app.modules.auth.dependencies import CurrentUser, get_user_from_token, require_auth_user
+from app.modules.coach import store as coach_store
 from app.modules.conversation.session_manager import (
     append_audio_chunk,
     append_dialogue_turn,
@@ -125,8 +126,12 @@ async def _send_assistant_audio(session_id: str, turn_id: str, ai_reply: str) ->
         },
     )
     sent_chunks = 0
-    for sequence, segment in enumerate(segments):
-        audio_data, audio_format = await asyncio.to_thread(synthesize_reply_audio, segment)
+    synth_tasks = [
+        asyncio.create_task(asyncio.to_thread(synthesize_reply_audio, segment))
+        for segment in segments
+    ]
+    for sequence, (segment, synth_task) in enumerate(zip(segments, synth_tasks)):
+        audio_data, audio_format = await synth_task
         sent_chunks += 1
         await ws_hub.send(
             session_id,
@@ -280,6 +285,23 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                             "server_ts": payload.get("client_ts", 0),
                         }
                     )
+                    merged_audio_bytes = merge_sorted_chunks(list(enumerate(finalized_turn.audio_chunks)))
+                    analysis_event = TurnTranscriptReadyEvent(
+                        session_id=session_id,
+                        user_id=session.user_id,
+                        turn_id=finalized_turn.turn_id,
+                        scene_id=session.scene_id,
+                        difficulty=session.difficulty,
+                        persona_id=session.persona_id,
+                        custom_background=session.custom_background,
+                        transcript=final_text,
+                        audio_format="wav_pcm16",
+                        audio_b64=b64encode(merged_audio_bytes).decode("utf-8"),
+                        assistant_reply_text="",
+                        turn_duration_ms=duration_ms,
+                    )
+                    coach_store.init_turn(analysis_event)
+                    await event_bus.publish(analysis_event)
                     ai_reply = await asyncio.to_thread(
                         generate_reply,
                         scene_id=session.scene_id,
@@ -303,23 +325,7 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                         final_text,
                         ai_reply,
                     )
-                    merged_audio_bytes = merge_sorted_chunks(list(enumerate(finalized_turn.audio_chunks)))
-                    await event_bus.publish(
-                        TurnTranscriptReadyEvent(
-                            session_id=session_id,
-                            user_id=session.user_id,
-                            turn_id=finalized_turn.turn_id,
-                            scene_id=session.scene_id,
-                            difficulty=session.difficulty,
-                            persona_id=session.persona_id,
-                            custom_background=session.custom_background,
-                            transcript=final_text,
-                            audio_format="wav_pcm16",
-                            audio_b64=b64encode(merged_audio_bytes).decode("utf-8"),
-                            assistant_reply_text=ai_reply,
-                            turn_duration_ms=duration_ms,
-                        )
-                    )
+                    coach_store.set_assistant_reply(session_id, finalized_turn.turn_id, ai_reply)
                     asyncio.create_task(
                         _send_assistant_audio(
                             session_id,

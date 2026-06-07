@@ -13,6 +13,7 @@ from app.modules.auth import service as auth_service
 
 def _client(monkeypatch, tmp_path) -> TestClient:
     monkeypatch.setattr(auth_service, "USERS_FILE", tmp_path / "users.json")
+    monkeypatch.setattr(auth_service, "SESSIONS_FILE", tmp_path / "sessions.json")
     auth_service.clear_sessions()
     return TestClient(app)
 
@@ -117,6 +118,17 @@ def test_token_expires_after_one_day(monkeypatch, tmp_path):
 
     assert response.status_code == 401
     assert token not in auth_service._sessions
+
+
+def test_token_survives_process_memory_clear(monkeypatch, tmp_path):
+    client = _client(monkeypatch, tmp_path)
+    token = _register(client)["token"]
+
+    auth_service._sessions.clear()
+    response = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert response.json()["email"] == "xin@example.com"
 
 
 def test_logout_invalidates_token(monkeypatch, tmp_path):

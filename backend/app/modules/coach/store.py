@@ -64,3 +64,9 @@ def set_status(session_id: str, turn_id: str, status: TurnStatus) -> None:
     record = get_turn(session_id, turn_id)
     if record is not None:
         record.status = status
+
+
+def set_assistant_reply(session_id: str, turn_id: str, assistant_reply_text: str) -> None:
+    record = get_turn(session_id, turn_id)
+    if record is not None:
+        record.assistant_reply_text = assistant_reply_text
