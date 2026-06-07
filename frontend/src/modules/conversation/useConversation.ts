@@ -6,17 +6,6 @@ import { useAppStore } from '@/core/store'
 import type { ServerMsg, SessionStatusResponse } from '@/core/types'
 import { ws } from '@/core/ws'
 
-const SCENE_SAMPLES: Record<string, [string, string]> = {
-  interview: ['Hello, I would like', ' to introduce myself.'],
-  restaurant: ['I would like to order', ' a pasta and water.'],
-  meeting: ['I think we should', ' increase the budget.'],
-  custom: ['I need to explain', ' a difficult situation clearly.'],
-}
-
-function encodeChunk(text: string) {
-  return btoa(text)
-}
-
 interface QueuedAssistantAudio {
   turnId: string | null
   data: string
@@ -29,15 +18,13 @@ const ASSISTANT_AUDIO_MAX_INITIAL_BUFFER_WAIT_MS = 300
 export function useConversation() {
   const store = useAppStore()
   const errorMessage = ref('')
-  const debugInfo = ref({
-    audioContextState: 'idle',
-    chunkCount: 0,
-    sampleRate: 0,
-    capturedSamples: 0,
-    peakLevel: 0,
-    sentBytes: 0,
-    lastEncoding: '',
-  })
+
+  const authHeaders = () =>
+    store.authToken
+      ? {
+          Authorization: `Bearer ${store.authToken}`,
+        }
+      : undefined
 
   const recordingSupported =
     typeof navigator !== 'undefined' &&
@@ -268,72 +255,26 @@ export function useConversation() {
     }
   }
 
-  function runMockTurn() {
-    if (!store.sessionId) {
-      errorMessage.value = '当前没有可用会话，请先选择场景。'
-      return
-    }
-
-    errorMessage.value = ''
-    stopAssistantAudioPlayback()
-    store.resetTurn()
-
-    const [firstChunk, secondChunk] = SCENE_SAMPLES[store.sceneId ?? 'interview'] ?? SCENE_SAMPLES.interview
-
-    ws.send({
-      type: 'audio.append',
-      session_id: store.sessionId,
-      turn_id: null,
-      seq: 0,
-      encoding: 'webm_opus',
-      chunk: encodeChunk(firstChunk),
-      is_last: false,
-      client_ts: Date.now(),
-    })
-
-    window.setTimeout(() => {
-      ws.send({
-        type: 'audio.append',
-        session_id: store.sessionId!,
-        turn_id: store.currentTurnId,
-        seq: 1,
-        encoding: 'webm_opus',
-        chunk: encodeChunk(secondChunk),
-        is_last: true,
-        client_ts: Date.now(),
-      })
-    }, 250)
-  }
-
   async function startRecording() {
     if (!store.sessionId) {
-      errorMessage.value = '当前没有可用会话，请先选择场景。'
+      errorMessage.value = '请先选择练习场景。'
       return
     }
 
     if (!recordingSupported) {
-      errorMessage.value = '当前浏览器不支持录音，请先使用模拟模式。'
+      errorMessage.value = '当前浏览器不支持录音，请更换浏览器后重试。'
       return
     }
 
     errorMessage.value = ''
     stopAssistantAudioPlayback()
-    debugInfo.value = {
-      audioContextState: 'initializing',
-      chunkCount: 0,
-      sampleRate: 0,
-      capturedSamples: 0,
-      peakLevel: 0,
-      sentBytes: 0,
-      lastEncoding: '',
-    }
     store.resetTurn()
     recordedChunks = []
 
     try {
       const AudioContextCtor = getAudioContextCtor()
       if (!AudioContextCtor) {
-        errorMessage.value = '当前浏览器不支持 PCM 录音，请使用模拟模式。'
+        errorMessage.value = '当前浏览器不支持录音编码，请更换浏览器后重试。'
         return
       }
 
@@ -346,39 +287,26 @@ export function useConversation() {
       muteNode = audioContext.createGain()
       muteNode.gain.value = 0
       store.isRecording = true
-      debugInfo.value.audioContextState = audioContext.state
-      debugInfo.value.sampleRate = recordedSampleRate
 
       processorNode.onaudioprocess = (event: AudioProcessingEvent) => {
         const inputData = event.inputBuffer.getChannelData(0)
         recordedChunks.push(new Float32Array(inputData))
-        let peak = 0
-        for (let index = 0; index < inputData.length; index += 1) {
-          const value = Math.abs(inputData[index])
-          if (value > peak) peak = value
-        }
-        debugInfo.value.chunkCount += 1
-        debugInfo.value.capturedSamples += inputData.length
-        debugInfo.value.peakLevel = Math.max(debugInfo.value.peakLevel, peak)
       }
 
       sourceNode.connect(processorNode)
       processorNode.connect(muteNode)
       muteNode.connect(audioContext.destination)
     } catch {
-      errorMessage.value = '无法访问麦克风，请检查浏览器权限设置。'
-      debugInfo.value.audioContextState = 'failed'
+      errorMessage.value = '无法访问麦克风，请检查浏览器权限。'
       cleanupMediaStream()
     }
   }
 
   async function stopRecording() {
-    if (!store.isRecording) {
-      return
-    }
+    if (!store.isRecording) return
 
     if (!store.sessionId || recordedChunks.length === 0) {
-      errorMessage.value = '前端没有采集到音频数据，请检查麦克风权限、系统默认输入设备，或确认页面是否成功开始录音。'
+      errorMessage.value = '没有采集到语音，请确认麦克风正常后重试。'
       cleanupMediaStream()
       return
     }
@@ -388,8 +316,6 @@ export function useConversation() {
     try {
       const wavBlob = encodeWav(mergeFloat32Chunks(recordedChunks), recordedSampleRate)
       const chunk = await blobToBase64(wavBlob)
-      debugInfo.value.sentBytes = wavBlob.size
-      debugInfo.value.lastEncoding = 'wav_pcm16'
       ws.send({
         type: 'audio.append',
         session_id: store.sessionId,
@@ -401,7 +327,7 @@ export function useConversation() {
         client_ts: Date.now(),
       })
     } catch {
-      errorMessage.value = '录音数据处理失败，请重试。'
+      errorMessage.value = '录音处理失败，请重新开始说话。'
     } finally {
       cleanupMediaStream()
     }
@@ -409,7 +335,7 @@ export function useConversation() {
 
   async function finishCurrentSession() {
     if (!store.sessionId) {
-      errorMessage.value = '当前没有可结束的会话。'
+      errorMessage.value = '当前没有可结束的对话。'
       return
     }
 
@@ -421,27 +347,29 @@ export function useConversation() {
     }
 
     try {
-      const response = await axios.get<SessionStatusResponse>(`/api/sessions/${store.sessionId}/status`)
-      if (response.data.state !== 'finished') {
-        errorMessage.value = '会话结束状态尚未同步完成，请稍后再试。'
-        return
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const response = await axios.get<SessionStatusResponse>(`/api/sessions/${store.sessionId}/status`, {
+          headers: authHeaders(),
+        })
+        if (response.data.state === 'finished') {
+          store.endSession()
+          return
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 250))
       }
     } catch {
-      errorMessage.value = '结束会话失败，无法确认当前状态。'
+      errorMessage.value = '结束对话失败，请稍后重试。'
       return
     }
-
-    store.endSession()
+    errorMessage.value = '对话还没有结束，请稍后再试。'
   }
 
   return {
     errorMessage,
-    debugInfo,
     recordingSupported,
     handleServerMessage,
     finishCurrentSession,
     startRecording,
     stopRecording,
-    runMockTurn,
   }
 }

@@ -1,56 +1,67 @@
 <template>
-  <div class="min-h-screen bg-[radial-gradient(circle_at_top,#f8fbff_0%,#eef4ff_45%,#edf2f7_100%)]">
-    <div v-if="!store.authReady" class="flex min-h-screen items-center justify-center px-6">
-      <div class="text-center">
-        <div class="text-sm font-medium text-slate-500">正在恢复登录状态...</div>
-        <button
-          class="mt-4 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-          type="button"
-          @click="resetLoginState"
-        >
-          重新登录
-        </button>
-      </div>
-    </div>
-    <AuthView v-else-if="!store.currentUser" />
-    <template v-else>
-      <SceneSelector v-if="store.phase === 'scene_select'" />
-      <ConversationRoom v-else-if="store.phase === 'in_session'">
-        <template #correction>
-          <CorrectionPanel />
-        </template>
-      </ConversationRoom>
-      <SessionSummaryPanel
-        v-else-if="store.phase === 'summary'"
-        :session-id="store.sessionId ?? 'mock-session'"
-      />
-    </template>
-  </div>
+  <main>
+    <HomePage
+      v-if="store.phase === 'home'"
+      @login="handleOpenLogin"
+      @start="handleStartExperience"
+    />
+
+    <AuthView
+      v-else-if="store.phase === 'auth'"
+      :pending="store.authLoading"
+      @back="store.phase = 'home'"
+    />
+
+    <SceneSelector
+      v-else-if="store.phase === 'scene_select'"
+      @back="store.phase = 'home'"
+    />
+
+    <ConversationRoom v-else-if="store.phase === 'in_session'">
+      <template #correction>
+        <CorrectionPanel />
+      </template>
+    </ConversationRoom>
+
+    <SessionSummaryPanel
+      v-else-if="store.phase === 'summary' && store.sessionId"
+      :session-id="store.sessionId"
+    />
+  </main>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
-
 import CorrectionPanel from '@/modules/coach/CorrectionPanel.vue'
 import SessionSummaryPanel from '@/modules/coach/SessionSummaryPanel.vue'
-import { useCoach } from '@/modules/coach/useCoach'
-import AuthView from '@/modules/auth/AuthView.vue'
 import ConversationRoom from '@/modules/conversation/ConversationRoom.vue'
 import SceneSelector from '@/modules/conversation/SceneSelector.vue'
+import AuthView from '@/modules/auth/AuthView.vue'
+import HomePage from '@/modules/home/HomePage.vue'
 import { useAppStore } from '@/core/store'
 
 const store = useAppStore()
 
-// Single WS subscription for all Coach analysis events (v1 + v2)
-useCoach()
+async function ensureAuthForPractice() {
+  if (store.currentUser) {
+    store.phase = 'scene_select'
+    return
+  }
 
-onMounted(() => {
-  void store.restoreAuth()
-})
+  const restored = await store.restoreAuth()
+  store.phase = restored ? 'scene_select' : 'auth'
+}
 
-function resetLoginState() {
-  store.clearAuthSession()
-  store.authReady = true
+async function handleStartExperience() {
+  await ensureAuthForPractice()
+}
+
+async function handleOpenLogin() {
+  if (store.currentUser) {
+    store.phase = 'scene_select'
+    return
+  }
+
+  const restored = await store.restoreAuth()
+  store.phase = restored ? 'scene_select' : 'auth'
 }
 </script>
-

@@ -1,346 +1,381 @@
 import axios from 'axios'
 import { defineStore } from 'pinia'
+import { computed, ref } from 'vue'
 
 import type {
   AuthResponse,
   AuthUser,
   ConversationMessage,
   CorrectionIssue,
-  ErrorCode,
+  Difficulty,
   PronScore,
   SessionSummaryResponse,
 } from './types'
-import { ws } from './ws'
 
-const AUTH_TOKEN_KEY = 'speakcoach.auth_token'
-const AUTH_RESTORE_TIMEOUT_MS = 4000
+type AppPhase = 'home' | 'auth' | 'scene_select' | 'in_session' | 'summary'
+type CoachAnalysisStatus = 'idle' | 'pending' | 'analyzed'
 
-function getStoredToken() {
-  if (typeof window === 'undefined') return null
-  return window.localStorage.getItem(AUTH_TOKEN_KEY)
-}
+const TOKEN_KEY = 'speakcoach_token'
+const USER_KEY = 'speakcoach_user'
 
-function storeToken(token: string | null) {
-  if (typeof window === 'undefined') return
-  if (token) {
-    window.localStorage.setItem(AUTH_TOKEN_KEY, token)
-  } else {
-    window.localStorage.removeItem(AUTH_TOKEN_KEY)
+function createEmptyPronScore(): PronScore {
+  return {
+    overall: 0,
+    accuracy: 0,
+    fluency: 0,
+    completeness: 0,
+    words: [],
   }
 }
 
-function setAuthHeader(token: string | null) {
-  if (token) {
-    axios.defaults.headers.common.Authorization = `Bearer ${token}`
-  } else {
-    delete axios.defaults.headers.common.Authorization
+function createId(prefix: string) {
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+export const useAppStore = defineStore('app', () => {
+  const phase = ref<AppPhase>('home')
+  const authReady = ref(true)
+  const authLoading = ref(false)
+  const currentUser = ref<AuthUser | null>(readCachedUser())
+  const authToken = ref<string | null>(localStorage.getItem(TOKEN_KEY))
+
+  const sessionId = ref<string | null>(null)
+  const sessionReady = ref(false)
+  const sceneId = ref<string | null>(null)
+  const personaId = ref('strict_interviewer')
+  const difficulty = ref<Difficulty>(1)
+  const customBackground = ref('')
+
+  const currentTurnId = ref<string | null>(null)
+  const latestAnalyzedTurnId = ref<string | null>(null)
+  const messages = ref<ConversationMessage[]>([])
+  const asrText = ref('')
+  const aiReplyText = ref('')
+  const isRecording = ref(false)
+  const isSpeaking = ref(false)
+  const isReplyAudioPending = ref(false)
+
+  const currentPronScore = ref<PronScore>(createEmptyPronScore())
+  const currentCorrections = ref<CorrectionIssue[]>([])
+  const currentSampleAnswer = ref('')
+
+  const pronunciationByTurn = ref<Record<string, PronScore>>({})
+  const correctionsByTurn = ref<Record<string, CorrectionIssue[]>>({})
+  const sampleAnswerByTurn = ref<Record<string, string>>({})
+  const coachAnalysisStatus = ref<Record<string, CoachAnalysisStatus>>({})
+
+  const summary = ref<SessionSummaryResponse | null>(null)
+  const summaryReady = ref(false)
+  const summaryLoading = ref(false)
+
+  const lastError = ref<{ code: string; message: string; retryable?: boolean } | null>(null)
+
+  const isAuthenticated = computed(() => !!currentUser.value && !!authToken.value)
+
+  function persistToken(token: string | null) {
+    authToken.value = token
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, token)
+    } else {
+      localStorage.removeItem(TOKEN_KEY)
+    }
   }
-}
 
-function getAuthErrorMessage(error: unknown, fallback: string) {
-  if (axios.isAxiosError(error)) {
-    const detail = error.response?.data?.detail
-    if (typeof detail === 'string') return detail
+  function persistUser(user: AuthUser | null) {
+    currentUser.value = user
+    if (user) {
+      localStorage.setItem(USER_KEY, JSON.stringify(user))
+    } else {
+      localStorage.removeItem(USER_KEY)
+    }
   }
-  return fallback
-}
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      reject(new Error('Request timed out.'))
-    }, timeoutMs)
+  function applyAuthSession(payload: AuthResponse) {
+    persistToken(payload.token)
+    persistUser(payload.user)
+    authReady.value = true
+  }
 
-    promise
-      .then((value) => resolve(value))
-      .catch((error) => reject(error))
-      .finally(() => window.clearTimeout(timer))
-  })
-}
+  async function register(payload: { name: string; email: string; password: string }) {
+    authLoading.value = true
+    try {
+      const { data } = await axios.post<AuthResponse>('/api/auth/register', payload)
+      applyAuthSession(data)
+      phase.value = 'scene_select'
+      return true
+    } finally {
+      authLoading.value = false
+    }
+  }
 
-export const useAppStore = defineStore('app', {
-  state: () => ({
-    currentUser: null as AuthUser | null,
-    authToken: null as string | null,
-    authReady: false,
-    authLoading: false,
-    authError: '',
+  async function login(payload: { email: string; password: string }) {
+    authLoading.value = true
+    try {
+      const { data } = await axios.post<AuthResponse>('/api/auth/login', payload)
+      applyAuthSession(data)
+      phase.value = 'scene_select'
+      return true
+    } finally {
+      authLoading.value = false
+    }
+  }
 
-    sessionId: null as string | null,
-    sceneId: null as string | null,
-    difficulty: 1 as 1 | 2 | 3,
-    personaId: null as string | null,
-    customBackground: '',
-    phase: 'scene_select' as 'scene_select' | 'in_session' | 'summary',
-    sessionReady: false,
-    currentTurnId: null as string | null,
-    isRecording: false,
-    isSpeaking: false,
-    isReplyAudioPending: false,
-    asrText: '',
-    aiReplyText: '',
-    messages: [] as ConversationMessage[],
-    currentPronScore: null as PronScore | null,
-    currentCorrections: [] as CorrectionIssue[],
-    currentSampleAnswer: '',
-    summary: null as SessionSummaryResponse | null,
-    lastError: null as { code: ErrorCode | string; message: string; retryable?: boolean } | null,
+  async function restoreAuth() {
+    if (!authToken.value) {
+      authReady.value = true
+      persistUser(null)
+      return null
+    }
 
-    pronunciationByTurn: {} as Record<string, PronScore>,
-    correctionsByTurn: {} as Record<string, CorrectionIssue[]>,
-    sampleAnswerByTurn: {} as Record<string, string>,
-    coachAnalysisStatus: {} as Record<string, 'pending' | 'analyzed' | 'failed'>,
-    latestAnalyzedTurnId: null as string | null,
-    summaryReady: false,
-    summaryLoading: false,
-  }),
-
-  actions: {
-    async restoreAuth() {
-      const token = getStoredToken()
-      if (!token) {
-        this.clearAuthSession()
-        this.authReady = true
-        return
-      }
-
-      this.authLoading = true
-      setAuthHeader(token)
-      try {
-        const response = await withTimeout(
-          axios.get<AuthUser>('/api/auth/me', { timeout: AUTH_RESTORE_TIMEOUT_MS }),
-          AUTH_RESTORE_TIMEOUT_MS + 500,
-        )
-        this.authToken = token
-        this.currentUser = response.data
-        this.authError = ''
-      } catch {
-        this.clearAuthSession()
-        this.authError = '登录状态已过期，请重新登录。'
-      } finally {
-        this.authLoading = false
-        this.authReady = true
-      }
-    },
-
-    async login(payload: { email: string; password: string }) {
-      this.authLoading = true
-      this.authError = ''
-      try {
-        const response = await axios.post<AuthResponse>('/api/auth/login', payload)
-        this.applyAuthSession(response.data)
-      } catch (error) {
-        const message = getAuthErrorMessage(error, '登录失败，请检查邮箱和密码。')
-        this.authError = message
-        throw new Error(message)
-      } finally {
-        this.authLoading = false
-        this.authReady = true
-      }
-    },
-
-    async register(payload: { name: string; email: string; password: string }) {
-      this.authLoading = true
-      this.authError = ''
-      try {
-        const response = await axios.post<AuthResponse>('/api/auth/register', payload)
-        this.applyAuthSession(response.data)
-      } catch (error) {
-        const message = getAuthErrorMessage(error, '注册失败，请稍后重试。')
-        this.authError = message
-        throw new Error(message)
-      } finally {
-        this.authLoading = false
-        this.authReady = true
-      }
-    },
-
-    async logout() {
-      const token = this.authToken
-      if (token) {
-        try {
-          await axios.post('/api/auth/logout', null, {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-        } catch {
-          // Server-side session may already be gone, local logout should still succeed.
-        }
-      }
-      ws.disconnect()
-      this.clearAuthSession()
-      this.clearConversationState()
-      this.authReady = true
-    },
-
-    applyAuthSession(response: AuthResponse) {
-      this.authToken = response.token
-      this.currentUser = response.user
-      this.authError = ''
-      storeToken(response.token)
-      setAuthHeader(response.token)
-      this.clearConversationState()
-    },
-
-    clearAuthSession() {
-      this.authToken = null
-      this.currentUser = null
-      this.authError = ''
-      storeToken(null)
-      setAuthHeader(null)
-    },
-
-    clearConversationState() {
-      this.sessionId = null
-      this.sceneId = null
-      this.difficulty = 1
-      this.personaId = null
-      this.customBackground = ''
-      this.phase = 'scene_select'
-      this.sessionReady = false
-      this.currentTurnId = null
-      this.isRecording = false
-      this.isSpeaking = false
-      this.isReplyAudioPending = false
-      this.asrText = ''
-      this.aiReplyText = ''
-      this.messages = []
-      this.currentPronScore = null
-      this.currentCorrections = []
-      this.currentSampleAnswer = ''
-      this.summary = null
-      this.lastError = null
-      this.pronunciationByTurn = {}
-      this.correctionsByTurn = {}
-      this.sampleAnswerByTurn = {}
-      this.coachAnalysisStatus = {}
-      this.latestAnalyzedTurnId = null
-      this.summaryReady = false
-      this.summaryLoading = false
-    },
-
-    startSession(params: {
-      sessionId: string
-      sceneId: string
-      difficulty: 1 | 2 | 3
-      personaId: string
-      customBackground?: string
-    }) {
-      this.sessionId = params.sessionId
-      this.sceneId = params.sceneId
-      this.difficulty = params.difficulty
-      this.personaId = params.personaId
-      this.customBackground = params.customBackground ?? ''
-      this.phase = 'in_session'
-      this.sessionReady = false
-      this.pronunciationByTurn = {}
-      this.correctionsByTurn = {}
-      this.sampleAnswerByTurn = {}
-      this.coachAnalysisStatus = {}
-      this.summary = null
-      this.summaryReady = false
-      this.summaryLoading = false
-      this.currentTurnId = null
-      this.asrText = ''
-      this.aiReplyText = ''
-      this.currentPronScore = null
-      this.currentCorrections = []
-      this.currentSampleAnswer = ''
-      this.isRecording = false
-      this.isSpeaking = false
-      this.isReplyAudioPending = false
-      this.messages = [
-        {
-          id: 'system-welcome',
-          turnId: null,
-          role: 'system',
-          text: params.customBackground
-            ? '自定义场景已经准备好。开始录音后，AI 会根据你提供的背景进入角色并继续追问。'
-            : '会话已创建。开始录音后，系统会识别你的英文，并把整轮对话记录在聊天区。',
-          state: 'final',
+    authLoading.value = true
+    authReady.value = false
+    try {
+      const { data } = await axios.get<AuthUser>('/api/auth/me', {
+        headers: {
+          Authorization: `Bearer ${authToken.value}`,
         },
-      ]
-      this.lastError = null
-    },
-
-    endSession() {
-      this.phase = 'summary'
-    },
-
-    markSessionReady() {
-      this.sessionReady = true
-    },
-
-    setError(error: { code: ErrorCode | string; message: string; retryable?: boolean }) {
-      this.lastError = error
-    },
-
-    resetTurn() {
-      this.currentTurnId = null
-      this.asrText = ''
-      this.aiReplyText = ''
-      this.isSpeaking = false
-      this.isReplyAudioPending = false
-      this.currentPronScore = null
-      this.currentCorrections = []
-      this.currentSampleAnswer = ''
-      this.lastError = null
-    },
-
-    upsertConversationMessage(message: ConversationMessage) {
-      const existingIndex = this.messages.findIndex((item) => item.id === message.id)
-      if (existingIndex >= 0) {
-        this.messages[existingIndex] = message
-        return
-      }
-      this.messages.push(message)
-    },
-
-    setUserMessage(turnId: string, text: string, state: 'streaming' | 'final') {
-      this.upsertConversationMessage({
-        id: `user-${turnId}`,
-        turnId,
-        role: 'user',
-        text,
-        state,
       })
-    },
+      persistUser(data)
+      authReady.value = true
+      return data
+    } catch {
+      persistToken(null)
+      persistUser(null)
+      authReady.value = true
+      return null
+    } finally {
+      authLoading.value = false
+    }
+  }
 
-    setAssistantMessage(turnId: string, text: string, state: 'streaming' | 'final' = 'final') {
-      this.upsertConversationMessage({
-        id: `assistant-${turnId}`,
-        turnId,
-        role: 'assistant',
-        text,
-        state,
-      })
-    },
-
-    setCoachAnalysisStatus(turnId: string, status: 'pending' | 'analyzed' | 'failed') {
-      this.coachAnalysisStatus[turnId] = status
-    },
-
-    setPronunciationResult(turnId: string, score: PronScore) {
-      this.pronunciationByTurn[turnId] = score
-      if (this.currentTurnId === turnId) {
-        this.currentPronScore = score
+  async function logout() {
+    try {
+      if (authToken.value) {
+        await axios.post(
+          '/api/auth/logout',
+          {},
+          {
+            headers: {
+              Authorization: `Bearer ${authToken.value}`,
+            },
+          },
+        )
       }
-    },
+    } catch {
+      // Ignore logout failures and clear local session anyway.
+    } finally {
+      persistToken(null)
+      persistUser(null)
+      clearConversationState()
+      phase.value = 'home'
+    }
+  }
 
-    setCorrectionsResult(turnId: string, issues: CorrectionIssue[], sampleAnswer = '') {
-      this.correctionsByTurn[turnId] = issues
-      this.sampleAnswerByTurn[turnId] = sampleAnswer
-      this.coachAnalysisStatus[turnId] = 'analyzed'
-      this.latestAnalyzedTurnId = turnId
-      if (this.currentTurnId === turnId) {
-        this.currentCorrections = issues
-        this.currentSampleAnswer = sampleAnswer
-      }
-    },
+  function ensureSystemWelcome() {
+    if (messages.value.length > 0) return
+    messages.value = [
+      {
+        id: createId('msg'),
+        turnId: null,
+        role: 'system',
+        text: '会话已开始。完成一轮录音后，系统会把你的英文和 AI 回复保存在这里。',
+        state: 'final',
+      },
+    ]
+  }
 
-    resetSummaryState() {
-      this.summary = null
-      this.summaryReady = false
-      this.summaryLoading = false
-    },
-  },
+  function startSession(payload: {
+    sessionId: string
+    sceneId: string
+    difficulty: Difficulty
+    personaId: string
+    customBackground?: string
+  }) {
+    sessionId.value = payload.sessionId
+    sceneId.value = payload.sceneId
+    difficulty.value = payload.difficulty
+    personaId.value = payload.personaId
+    customBackground.value = payload.customBackground ?? ''
+    sessionReady.value = false
+    currentTurnId.value = null
+    asrText.value = ''
+    aiReplyText.value = ''
+    isRecording.value = false
+    isSpeaking.value = false
+    isReplyAudioPending.value = false
+    currentPronScore.value = createEmptyPronScore()
+    currentCorrections.value = []
+    currentSampleAnswer.value = ''
+    pronunciationByTurn.value = {}
+    correctionsByTurn.value = {}
+    sampleAnswerByTurn.value = {}
+    coachAnalysisStatus.value = {}
+    latestAnalyzedTurnId.value = null
+    lastError.value = null
+    summary.value = null
+    summaryReady.value = false
+    summaryLoading.value = false
+    messages.value = []
+    ensureSystemWelcome()
+    phase.value = 'in_session'
+  }
+
+  function markSessionReady() {
+    sessionReady.value = true
+  }
+
+  function resetTurn() {
+    asrText.value = ''
+    aiReplyText.value = ''
+    currentPronScore.value = createEmptyPronScore()
+    currentCorrections.value = []
+    currentSampleAnswer.value = ''
+    lastError.value = null
+  }
+
+  function upsertMessage(role: ConversationMessage['role'], turnId: string | null, text: string, state: ConversationMessage['state']) {
+    const target = messages.value.find((message) => message.role === role && message.turnId === turnId)
+    if (target) {
+      target.text = text
+      target.state = state
+      return
+    }
+
+    messages.value.push({
+      id: createId('msg'),
+      turnId,
+      role,
+      text,
+      state,
+    })
+  }
+
+  function setUserMessage(turnId: string, text: string, state: ConversationMessage['state']) {
+    upsertMessage('user', turnId, text, state)
+  }
+
+  function setAssistantMessage(turnId: string, text: string) {
+    upsertMessage('assistant', turnId, text, 'final')
+  }
+
+  function setPronunciationResult(turnId: string, score: PronScore) {
+    pronunciationByTurn.value[turnId] = score
+    currentPronScore.value = score
+  }
+
+  function setCorrectionsResult(turnId: string, issues: CorrectionIssue[], sampleAnswer: string) {
+    correctionsByTurn.value[turnId] = issues
+    sampleAnswerByTurn.value[turnId] = sampleAnswer
+    currentCorrections.value = issues
+    currentSampleAnswer.value = sampleAnswer
+  }
+
+  function setCoachAnalysisStatus(turnId: string, status: CoachAnalysisStatus) {
+    coachAnalysisStatus.value[turnId] = status
+    if (status === 'analyzed') {
+      latestAnalyzedTurnId.value = turnId
+    }
+  }
+
+  function setError(error: { code: string; message: string; retryable?: boolean }) {
+    lastError.value = error
+  }
+
+  function endSession() {
+    phase.value = 'summary'
+  }
+
+  function resetSummaryState() {
+    summary.value = null
+    summaryReady.value = false
+    summaryLoading.value = false
+  }
+
+  function clearConversationState() {
+    sessionId.value = null
+    sessionReady.value = false
+    sceneId.value = null
+    personaId.value = 'strict_interviewer'
+    difficulty.value = 1
+    customBackground.value = ''
+    currentTurnId.value = null
+    latestAnalyzedTurnId.value = null
+    messages.value = []
+    asrText.value = ''
+    aiReplyText.value = ''
+    isRecording.value = false
+    isSpeaking.value = false
+    isReplyAudioPending.value = false
+    currentPronScore.value = createEmptyPronScore()
+    currentCorrections.value = []
+    currentSampleAnswer.value = ''
+    pronunciationByTurn.value = {}
+    correctionsByTurn.value = {}
+    sampleAnswerByTurn.value = {}
+    coachAnalysisStatus.value = {}
+    resetSummaryState()
+    lastError.value = null
+    phase.value = 'home'
+  }
+
+  return {
+    phase,
+    authReady,
+    authLoading,
+    currentUser,
+    authToken,
+    isAuthenticated,
+    sessionId,
+    sessionReady,
+    sceneId,
+    personaId,
+    difficulty,
+    customBackground,
+    currentTurnId,
+    latestAnalyzedTurnId,
+    messages,
+    asrText,
+    aiReplyText,
+    isRecording,
+    isSpeaking,
+    isReplyAudioPending,
+    currentPronScore,
+    currentCorrections,
+    currentSampleAnswer,
+    pronunciationByTurn,
+    correctionsByTurn,
+    sampleAnswerByTurn,
+    coachAnalysisStatus,
+    summary,
+    summaryReady,
+    summaryLoading,
+    lastError,
+    register,
+    login,
+    restoreAuth,
+    logout,
+    startSession,
+    markSessionReady,
+    resetTurn,
+    setUserMessage,
+    setAssistantMessage,
+    setPronunciationResult,
+    setCorrectionsResult,
+    setCoachAnalysisStatus,
+    setError,
+    endSession,
+    resetSummaryState,
+    clearConversationState,
+  }
 })
+
+function readCachedUser(): AuthUser | null {
+  const raw = localStorage.getItem(USER_KEY)
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as AuthUser
+  } catch {
+    localStorage.removeItem(USER_KEY)
+    return null
+  }
+}
