@@ -54,6 +54,7 @@ class TurnRecord(BaseModel):
 # Dev A will replace this with TurnTranscriptReadyEvent once migrated.
 class SpeakerTurnEvent(BaseModel):
     session_id: str
+    user_id: str = ""
     turn_id: str
     user_text: str
     pron_score: PronScore
@@ -64,6 +65,7 @@ class SpeakerTurnEvent(BaseModel):
 # Dev A → Dev B via event bus (v2 target contract).
 class TurnTranscriptReadyEvent(BaseModel):
     session_id: str
+    user_id: str = ""
     turn_id: str
     scene_id: str
     difficulty: Difficulty

@@ -5,7 +5,7 @@ from app.modules.coach import store as coach_store
 from app.modules.coach.store import TurnAnalysisRecord
 
 
-def build_summary(session_id: str) -> SessionSummaryResponse | None:
+def build_summary(session_id: str, user_id: str | None = None) -> SessionSummaryResponse | None:
     """Aggregate all analyzed turns into a SessionSummaryResponse.
 
     Returns None if the session has no turns at all (→ 404).
@@ -13,6 +13,8 @@ def build_summary(session_id: str) -> SessionSummaryResponse | None:
     """
     turns = coach_store.get_session_turns(session_id)
     if not turns:
+        return None
+    if user_id is not None and any(turn.user_id != user_id for turn in turns):
         return None
 
     scene_id = turns[0].scene_id
