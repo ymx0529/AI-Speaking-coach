@@ -132,6 +132,24 @@ def append_turn(
     return session
 
 
+def append_dialogue_turn(
+    session_id: str,
+    turn_id: str,
+    user_text: str,
+    ai_reply: str,
+) -> SessionState | None:
+    session = _sessions.get(session_id)
+    if session is None:
+        return None
+
+    session.turn_count += 1
+    session.history.append({"role": "user", "content": user_text})
+    session.history.append({"role": "assistant", "content": ai_reply})
+    session.current_turn_id = turn_id
+    session.current_turn_state = "completed"
+    return session
+
+
 def finish_session(
     session_id: str,
     *,

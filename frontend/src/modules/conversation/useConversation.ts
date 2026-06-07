@@ -20,6 +20,12 @@ function getAudioMimeType(format?: string) {
   return 'audio/mpeg'
 }
 
+interface QueuedAssistantAudio {
+  turnId: string | null
+  data: string
+  format?: string
+}
+
 async function blobToBase64(blob: Blob): Promise<string> {
   const buffer = await blob.arrayBuffer()
   const bytes = new Uint8Array(buffer)
@@ -104,6 +110,48 @@ export function useConversation() {
   let muteNode: GainNode | null = null
   let recordedChunks: Float32Array[] = []
   let recordedSampleRate = 16000
+  let assistantAudioQueue: QueuedAssistantAudio[] = []
+  let activeAssistantAudio: HTMLAudioElement | null = null
+  let activeAudioStreamTurnId: string | null = null
+  let audioStreamEnded = false
+
+  function isCurrentAudioTurn(turnId?: string | null) {
+    return !turnId || !store.currentTurnId || store.currentTurnId === turnId
+  }
+
+  function stopAssistantAudioPlayback() {
+    if (activeAssistantAudio) {
+      activeAssistantAudio.pause()
+      activeAssistantAudio.src = ''
+    }
+    activeAssistantAudio = null
+    assistantAudioQueue = []
+    activeAudioStreamTurnId = null
+    audioStreamEnded = false
+    store.isSpeaking = false
+    store.isReplyAudioPending = false
+  }
+
+  function startAssistantAudioStream(turnId: string) {
+    if (!isCurrentAudioTurn(turnId)) return
+
+    if (activeAudioStreamTurnId !== turnId) {
+      stopAssistantAudioPlayback()
+      activeAudioStreamTurnId = turnId
+      audioStreamEnded = false
+    }
+    store.isReplyAudioPending = true
+  }
+
+  function finishAssistantAudioIfIdle() {
+    if (assistantAudioQueue.length > 0) {
+      playNextAssistantAudio()
+      return
+    }
+
+    store.isSpeaking = false
+    store.isReplyAudioPending = !!activeAudioStreamTurnId && !audioStreamEnded
+  }
 
   function cleanupMediaStream() {
     processorNode?.disconnect()
@@ -122,26 +170,60 @@ export function useConversation() {
     recordedChunks = []
   }
 
-  function playAssistantAudio(data: string, format?: string) {
+  function playNextAssistantAudio() {
+    if (activeAssistantAudio || assistantAudioQueue.length === 0) return
+
+    const nextAudio = assistantAudioQueue.shift()
+    if (!nextAudio) return
+    if (!isCurrentAudioTurn(nextAudio.turnId)) {
+      playNextAssistantAudio()
+      return
+    }
+
     try {
       store.isReplyAudioPending = false
       store.isSpeaking = true
-      const audio = new Audio(`data:${getAudioMimeType(format)};base64,${data}`)
-      audio.onended = () => {
-        store.isSpeaking = false
+      const audio = new Audio(`data:${getAudioMimeType(nextAudio.format)};base64,${nextAudio.data}`)
+      activeAssistantAudio = audio
+      const finishAudio = () => {
+        if (activeAssistantAudio === audio) {
+          activeAssistantAudio = null
+        }
+        finishAssistantAudioIfIdle()
       }
-      audio.onerror = () => {
-        store.isSpeaking = false
-      }
+      audio.onended = finishAudio
+      audio.onerror = finishAudio
       const playPromise = audio.play()
       if (playPromise) {
-        void playPromise.catch(() => {
-          store.isSpeaking = false
-        })
+        void playPromise.catch(finishAudio)
       }
     } catch {
-      store.isReplyAudioPending = false
+      activeAssistantAudio = null
+      finishAssistantAudioIfIdle()
+    }
+  }
+
+  function queueAssistantAudio(data: string, format?: string, turnId?: string | null, endsStream = false) {
+    if (!isCurrentAudioTurn(turnId)) return
+
+    if (turnId && activeAudioStreamTurnId !== turnId) {
+      startAssistantAudioStream(turnId)
+    }
+    if (turnId && endsStream && activeAudioStreamTurnId === turnId) {
+      audioStreamEnded = true
+    }
+    assistantAudioQueue.push({ turnId: turnId ?? null, data, format })
+    playNextAssistantAudio()
+  }
+
+  function endAssistantAudioStream(turnId: string) {
+    if (!isCurrentAudioTurn(turnId)) return
+    if (activeAudioStreamTurnId === turnId) {
+      audioStreamEnded = true
+    }
+    if (!activeAssistantAudio && assistantAudioQueue.length === 0) {
       store.isSpeaking = false
+      store.isReplyAudioPending = false
     }
   }
 
@@ -149,6 +231,7 @@ export function useConversation() {
     if (msg.type === 'session.ready') {
       store.markSessionReady()
     } else if (msg.type === 'turn.started') {
+      stopAssistantAudioPlayback()
       store.currentTurnId = msg.turn_id
     } else if (msg.type === 'asr.partial' || msg.type === 'asr_partial') {
       store.asrText = msg.text
@@ -159,10 +242,17 @@ export function useConversation() {
       store.aiReplyText = msg.text
       store.isReplyAudioPending = true
     } else if (msg.type === 'assistant.reply_audio') {
-      playAssistantAudio(msg.data, msg.audio_format)
+      queueAssistantAudio(msg.data, msg.audio_format, msg.turn_id, true)
+    } else if (msg.type === 'assistant.reply_audio_start') {
+      startAssistantAudioStream(msg.turn_id)
+    } else if (msg.type === 'assistant.reply_audio_chunk') {
+      queueAssistantAudio(msg.data, msg.audio_format, msg.turn_id)
+    } else if (msg.type === 'assistant.reply_audio_end') {
+      endAssistantAudioStream(msg.turn_id)
     } else if (msg.type === 'reply_audio') {
-      playAssistantAudio(msg.data, 'mp3')
+      queueAssistantAudio(msg.data, 'mp3', msg.turn_id, true)
     } else if (msg.type === 'error') {
+      stopAssistantAudioPlayback()
       store.isReplyAudioPending = false
       errorMessage.value = msg.message
       store.setError({
@@ -180,6 +270,7 @@ export function useConversation() {
     }
 
     errorMessage.value = ''
+    stopAssistantAudioPlayback()
     store.resetTurn()
 
     const [firstChunk, secondChunk] = SCENE_SAMPLES[store.sceneId ?? 'interview'] ?? SCENE_SAMPLES.interview
@@ -221,6 +312,7 @@ export function useConversation() {
     }
 
     errorMessage.value = ''
+    stopAssistantAudioPlayback()
     debugInfo.value = {
       audioContextState: 'initializing',
       chunkCount: 0,

@@ -8,7 +8,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from app.modules.conversation.audio_utils import merge_sorted_chunks
-from app.modules.conversation.azure_speech import synthesize_reply_audio
+from app.modules.conversation.azure_speech import split_reply_for_tts, synthesize_reply_audio
 from app.modules.conversation.llm_client import generate_reply
 from app.modules.conversation.qwen_stt import build_partial_transcript, transcribe_chunks
 from app.core import event_bus, ws_hub
@@ -22,6 +22,7 @@ from app.core.types import (
 )
 from app.modules.conversation.session_manager import (
     append_audio_chunk,
+    append_dialogue_turn,
     append_turn,
     finalize_turn,
     end_session,
@@ -101,6 +102,48 @@ def _handle_asr_partial(websocket: WebSocket, session_id: str, turn_id: str, tex
             "text": text,
             "server_ts": 0,
         }
+    )
+
+
+async def _send_assistant_audio(session_id: str, turn_id: str, ai_reply: str) -> None:
+    segments = split_reply_for_tts(ai_reply)
+    if not segments:
+        return
+
+    await ws_hub.send(
+        session_id,
+        {
+            "type": "assistant.reply_audio_start",
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "total_chunks": len(segments),
+        },
+    )
+    sent_chunks = 0
+    for sequence, segment in enumerate(segments):
+        audio_data, audio_format = await asyncio.to_thread(synthesize_reply_audio, segment)
+        sent_chunks += 1
+        await ws_hub.send(
+            session_id,
+            {
+                "type": "assistant.reply_audio_chunk",
+                "session_id": session_id,
+                "turn_id": turn_id,
+                "sequence": sequence,
+                "audio_format": audio_format,
+                "text": segment,
+                "data": audio_data,
+            },
+        )
+
+    await ws_hub.send(
+        session_id,
+        {
+            "type": "assistant.reply_audio_end",
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "total_chunks": sent_chunks,
+        },
     )
 
 
@@ -230,6 +273,12 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                             "text": ai_reply,
                         }
                     )
+                    append_dialogue_turn(
+                        session_id,
+                        finalized_turn.turn_id,
+                        final_text,
+                        ai_reply,
+                    )
                     merged_audio_bytes = merge_sorted_chunks(list(enumerate(finalized_turn.audio_chunks)))
                     await event_bus.publish(
                         TurnTranscriptReadyEvent(
@@ -245,16 +294,12 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                             turn_duration_ms=duration_ms,
                         )
                     )
-                    audio_data, audio_format = await asyncio.to_thread(synthesize_reply_audio, ai_reply)
-                    await ws_hub.send(
-                        session_id,
-                        {
-                            "type": "assistant.reply_audio",
-                            "session_id": session_id,
-                            "turn_id": finalized_turn.turn_id,
-                            "audio_format": audio_format,
-                            "data": audio_data,
-                        },
+                    asyncio.create_task(
+                        _send_assistant_audio(
+                            session_id,
+                            finalized_turn.turn_id,
+                            ai_reply,
+                        )
                     )
                     continue
 

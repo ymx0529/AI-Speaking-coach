@@ -126,3 +126,26 @@ def test_append_turn_preserves_history_without_mixing_coach_state():
         {"role": "assistant", "content": "Nice to meet you. Please introduce yourself."},
     ]
     assert session.current_turn_state == "completed"
+
+
+def test_append_dialogue_turn_records_history_without_analysis_payload():
+    session_manager.start_session("session-1", "interview", 1, "strict_interviewer")
+    session_manager.append_audio_chunk("session-1", 0, "chunk-0")
+    turn_id = session_manager.get_session("session-1").current_turn_id
+    session_manager.finalize_turn("session-1", now_ms=2000)
+
+    session = session_manager.append_dialogue_turn(
+        "session-1",
+        turn_id=turn_id,
+        user_text="I worked on a payment service.",
+        ai_reply="What result did it create?",
+    )
+
+    assert session is not None
+    assert session.turn_count == 1
+    assert session.history == [
+        {"role": "user", "content": "I worked on a payment service."},
+        {"role": "assistant", "content": "What result did it create?"},
+    ]
+    assert session.turns == []
+    assert session.current_turn_state == "completed"
