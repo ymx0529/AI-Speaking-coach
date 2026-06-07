@@ -17,12 +17,14 @@ def test_start_session_creates_clean_state():
         scene_id="interview",
         difficulty=2,
         persona_id="strict_interviewer",
+        user_id="user-1",
     )
 
     session = session_manager.get_session("session-1")
 
     assert session is not None
     assert session.session_id == "session-1"
+    assert session.user_id == "user-1"
     assert session.scene_id == "interview"
     assert session.difficulty == 2
     assert session.persona_id == "strict_interviewer"

@@ -5,7 +5,7 @@ from base64 import b64encode
 import json
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
 from app.modules.conversation.audio_utils import merge_sorted_chunks
 from app.modules.conversation.azure_speech import split_reply_for_tts, synthesize_reply_audio
@@ -20,6 +20,7 @@ from app.core.types import (
     TurnTranscriptReadyEvent,
     WordScore,
 )
+from app.modules.auth.dependencies import CurrentUser, get_user_from_token, require_auth_user
 from app.modules.conversation.session_manager import (
     append_audio_chunk,
     append_dialogue_turn,
@@ -27,6 +28,7 @@ from app.modules.conversation.session_manager import (
     finalize_turn,
     end_session,
     get_session,
+    get_session_for_user,
     start_session,
 )
 
@@ -40,8 +42,11 @@ def _encoding_to_source_format(encoding: str | None) -> str:
 
 
 @router.get("/api/sessions/{session_id}/status", response_model=SessionStatusResponse)
-async def get_session_status(session_id: str) -> SessionStatusResponse:
-    session = get_session(session_id)
+async def get_session_status(
+    session_id: str,
+    user: CurrentUser = Depends(require_auth_user),
+) -> SessionStatusResponse:
+    session = get_session_for_user(session_id, user.id)
     if session is None:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found.")
 
@@ -149,6 +154,11 @@ async def _send_assistant_audio(session_id: str, turn_id: str, ai_reply: str) ->
 
 @router.websocket("/ws/session/{session_id}")
 async def session_ws(websocket: WebSocket, session_id: str) -> None:
+    user = get_user_from_token(websocket.query_params.get("token"))
+    if user is None:
+        await websocket.close(code=1008)
+        return
+
     await websocket.accept()
     ws_hub.register(session_id, websocket)
 
@@ -159,8 +169,20 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
             msg_type = payload.get("type")
 
             if msg_type in {"session_start", "session.start"}:
+                existing_session = get_session(session_id)
+                if existing_session is not None and existing_session.user_id not in {"", user.id}:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "code": "FORBIDDEN",
+                            "message": "Session belongs to another user.",
+                        }
+                    )
+                    continue
+
                 start_session(
                     session_id=session_id,
+                    user_id=user.id,
                     scene_id=payload.get("scene_id", "interview"),
                     difficulty=payload.get("difficulty", 1),
                     persona_id=payload.get("persona_id", "strict_interviewer"),
@@ -175,7 +197,7 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                         }
                     )
             elif msg_type in {"audio_chunk", "audio.append"}:
-                session = get_session(session_id)
+                session = get_session_for_user(session_id, user.id)
                 if session is None:
                     await websocket.send_json(
                         {
@@ -195,7 +217,7 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                         now_ms=payload.get("client_ts", 0),
                     )
                     session = get_session(session_id)
-                    if turn_id is None or session is None:
+                    if turn_id is None or session is None or session.user_id != user.id:
                         await websocket.send_json(
                             {
                                 "type": "error",
@@ -285,6 +307,7 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                     await event_bus.publish(
                         TurnTranscriptReadyEvent(
                             session_id=session_id,
+                            user_id=session.user_id,
                             turn_id=finalized_turn.turn_id,
                             scene_id=session.scene_id,
                             difficulty=session.difficulty,
@@ -309,7 +332,7 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                 append_audio_chunk(session_id, payload.get("seq", 0), payload.get("data", ""))
 
             elif msg_type == "audio_end":
-                session = get_session(session_id)
+                session = get_session_for_user(session_id, user.id)
                 if session is None:
                     await websocket.send_json(
                         {
@@ -367,6 +390,7 @@ async def session_ws(websocket: WebSocket, session_id: str) -> None:
                 await event_bus.publish(
                     SpeakerTurnEvent(
                         session_id=session_id,
+                        user_id=session.user_id,
                         turn_id=turn_id,
                         user_text=user_text,
                         pron_score=pron_score,

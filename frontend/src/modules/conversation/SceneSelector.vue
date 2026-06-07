@@ -15,9 +15,12 @@
             </div>
           </div>
 
-          <div class="flex items-center gap-3 rounded-full border border-[color:var(--line-soft)] bg-[var(--brand-50)] px-4 py-2 text-sm font-medium text-[var(--brand-500)]">
-            <span class="inline-block h-2.5 w-2.5 rounded-full bg-sky-500" />
-            当前支持实时录音与 Qwen 陪练
+          <div class="flex items-center gap-3">
+            <div class="hidden items-center gap-3 rounded-full border border-[color:var(--line-soft)] bg-[var(--brand-50)] px-4 py-2 text-sm font-medium text-[var(--brand-500)] md:flex">
+              <span class="inline-block h-2.5 w-2.5 rounded-full bg-sky-500" />
+              当前支持实时录音与 Qwen 陪练
+            </div>
+            <UserAccountBadge />
           </div>
         </div>
       </div>
@@ -30,12 +33,11 @@
                 Scenario Practice
               </div>
               <h1 class="mt-5 max-w-xl text-4xl font-semibold leading-tight tracking-tight text-slate-950 lg:text-[3.2rem]">
-                在真实场景中练表达，
+                在真实场景中练习表达，
                 <span class="text-[var(--brand-500)]">让 AI 更懂你的陪练目标</span>
               </h1>
               <p class="mt-5 max-w-2xl text-base leading-8 text-[var(--ink-3)]">
-                先选难度，再进入固定场景，或者直接输入你自己的背景。AI 会根据场景压力、角色关系和目标，
-                给出更贴近真实交流的追问和回应。
+                先选难度，再进入固定场景，或者直接输入你自己的背景。AI 会根据场景压力、角色关系和目标，给出更贴近真实交流的追问和回应。
               </p>
 
               <div class="mt-7 flex flex-wrap gap-3">
@@ -234,6 +236,7 @@ import { SCENES } from '@/core/scenes'
 import { useAppStore } from '@/core/store'
 import type { Difficulty } from '@/core/types'
 import { ws } from '@/core/ws'
+import UserAccountBadge from '@/modules/auth/UserAccountBadge.vue'
 
 const store = useAppStore()
 const selectedDifficulty = ref<Difficulty>(1)
@@ -263,7 +266,7 @@ const difficultyOptions = [
 
 const difficultyLabel = computed(() => difficultyOptions.find((option) => option.value === selectedDifficulty.value)?.label ?? '入门')
 const currentDifficultyDescription = computed(
-  () => difficultyOptions.find((option) => option.value === selectedDifficulty.value)?.description ?? ''
+  () => difficultyOptions.find((option) => option.value === selectedDifficulty.value)?.description ?? '',
 )
 const canStartCustom = computed(() => customBackground.value.trim().length > 0)
 
@@ -276,13 +279,13 @@ const fixedSceneCards = computed(() => ({
   },
   restaurant: {
     ...SCENES.restaurant,
-    icon: '🍽',
+    icon: '🍔',
     iconBg: 'bg-[linear-gradient(135deg,#dcfce7_0%,#fef9c3_100%)]',
     description: '围绕点餐、偏好、加单和确认细节来练习更自然的生活口语。',
   },
   meeting: {
     ...SCENES.meeting,
-    icon: '📊',
+    icon: '📳',
     iconBg: 'bg-[linear-gradient(135deg,#fee2e2_0%,#fde68a_100%)]',
     description: '模拟商务会议发言、提案解释、风险说明和方案讨论。',
   },
@@ -315,7 +318,7 @@ async function start(sceneId: string) {
   })
 
   try {
-    await ws.connect(sessionId)
+    await ws.connect(sessionId, store.authToken)
     ws.send({
       type: 'session.start',
       session_id: sessionId,

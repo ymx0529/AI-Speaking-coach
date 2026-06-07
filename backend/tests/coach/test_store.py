@@ -7,6 +7,7 @@ from app.modules.coach import store as coach_store
 def _event(**kwargs) -> TurnTranscriptReadyEvent:
     defaults = dict(
         session_id="sess-1",
+        user_id="user-1",
         turn_id="turn-1",
         scene_id="interview",
         difficulty=2,
@@ -29,6 +30,7 @@ def clear_store():
 def test_init_creates_pending_record():
     record = coach_store.init_turn(_event())
     assert record.session_id == "sess-1"
+    assert record.user_id == "user-1"
     assert record.turn_id == "turn-1"
     assert record.status == "pending"
 

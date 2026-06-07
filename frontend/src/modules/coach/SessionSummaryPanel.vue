@@ -151,7 +151,7 @@ async function retry() {
 
 function restart() {
   ws.disconnect()
-  store.$reset()
+  store.clearConversationState()
 }
 
 onMounted(() => {

@@ -11,6 +11,7 @@ TurnStatus = Literal["pending", "analyzed", "failed"]
 @dataclass
 class TurnAnalysisRecord:
     session_id: str
+    user_id: str
     turn_id: str
     transcript: str
     assistant_reply_text: str
@@ -24,6 +25,7 @@ class TurnAnalysisRecord:
     grammar_score: float | None = None
     expression_score: float | None = None
     vocabulary_score: float | None = None
+    sample_answer: str = ""
 
 
 # {session_id: {turn_id: TurnAnalysisRecord}}
@@ -37,6 +39,7 @@ def init_turn(event: TurnTranscriptReadyEvent) -> TurnAnalysisRecord:
         return session[event.turn_id]
     record = TurnAnalysisRecord(
         session_id=event.session_id,
+        user_id=event.user_id,
         turn_id=event.turn_id,
         transcript=event.transcript,
         assistant_reply_text=event.assistant_reply_text,

@@ -39,6 +39,7 @@
               </div>
 
               <div class="flex items-center gap-3">
+                <UserAccountBadge />
                 <div class="hidden rounded-[18px] bg-slate-950 px-4 py-3 text-sm font-medium text-white shadow-lg lg:block">
                   {{ audioStatusLabel }}
                 </div>
@@ -234,6 +235,7 @@ import { SCENES } from '@/core/scenes'
 import { useAppStore } from '@/core/store'
 import type { ConversationMessage } from '@/core/types'
 import { ws } from '@/core/ws'
+import UserAccountBadge from '@/modules/auth/UserAccountBadge.vue'
 
 import PronScoreBar from './PronScoreBar.vue'
 import { useConversation } from './useConversation'

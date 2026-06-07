@@ -25,6 +25,7 @@ class FinalizedTurn:
 @dataclass
 class SessionState:
     session_id: str
+    user_id: str
     scene_id: str
     difficulty: int
     persona_id: str
@@ -50,10 +51,12 @@ def start_session(
     scene_id: str,
     difficulty: int,
     persona_id: str,
+    user_id: str = "",
     custom_background: str | None = None,
 ) -> None:
     _sessions[session_id] = SessionState(
         session_id=session_id,
+        user_id=user_id,
         scene_id=scene_id,
         difficulty=difficulty,
         persona_id=persona_id,
@@ -109,6 +112,13 @@ def finalize_turn(session_id: str, now_ms: int | None = None) -> FinalizedTurn |
 
 def get_session(session_id: str) -> SessionState | None:
     return _sessions.get(session_id)
+
+
+def get_session_for_user(session_id: str, user_id: str) -> SessionState | None:
+    session = get_session(session_id)
+    if session is None or session.user_id != user_id:
+        return None
+    return session
 
 
 def append_turn(

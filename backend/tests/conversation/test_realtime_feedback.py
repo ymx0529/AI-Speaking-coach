@@ -6,10 +6,13 @@ from unittest.mock import AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from app.core import event_bus
 from app.main import app
+from app.modules.auth import service as auth_service
 from app.modules.conversation import session_manager
 
 
@@ -19,6 +22,7 @@ def _b64(text: str) -> str:
 
 def setup_function() -> None:
     session_manager._sessions.clear()
+    auth_service.clear_sessions()
 
 
 def _receive_until(websocket, msg_type: str, *, max_messages: int = 8) -> dict:
@@ -29,10 +33,25 @@ def _receive_until(websocket, msg_type: str, *, max_messages: int = 8) -> dict:
     raise AssertionError(f"Did not receive message type {msg_type}")
 
 
-def test_audio_append_emits_partial_then_final_transcript():
+def _auth_query(monkeypatch, tmp_path, email: str = "realtime@example.com") -> str:
+    monkeypatch.setattr(auth_service, "USERS_FILE", tmp_path / "users.json")
+    token, _user = auth_service.register_user(name="Realtime User", email=email, password="secret1")
+    return f"?token={token}"
+
+
+def test_websocket_rejects_missing_token():
     client = TestClient(app)
 
-    with client.websocket_connect("/ws/session/realtime-1") as websocket:
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/ws/session/realtime-auth"):
+            pass
+
+
+def test_audio_append_emits_partial_then_final_transcript(monkeypatch, tmp_path):
+    auth_query = _auth_query(monkeypatch, tmp_path)
+    client = TestClient(app)
+
+    with client.websocket_connect(f"/ws/session/realtime-1{auth_query}") as websocket:
         websocket.send_json(
             {
                 "type": "session.start",
@@ -96,12 +115,13 @@ def test_audio_append_emits_partial_then_final_transcript():
     assert reply_audio_chunk_msg["data"]
 
 
-def test_audio_append_publishes_turn_transcript_ready_event_once(monkeypatch):
+def test_audio_append_publishes_turn_transcript_ready_event_once(monkeypatch, tmp_path):
+    auth_query = _auth_query(monkeypatch, tmp_path)
     publish_mock = AsyncMock()
     monkeypatch.setattr(event_bus, "publish", publish_mock)
     client = TestClient(app)
 
-    with client.websocket_connect("/ws/session/realtime-2") as websocket:
+    with client.websocket_connect(f"/ws/session/realtime-2{auth_query}") as websocket:
         websocket.send_json(
             {
                 "type": "session.start",
@@ -158,7 +178,8 @@ def test_audio_append_publishes_turn_transcript_ready_event_once(monkeypatch):
     assert event.turn_duration_ms > 0
 
 
-def test_session_start_keeps_custom_background_for_reply_generation(monkeypatch):
+def test_session_start_keeps_custom_background_for_reply_generation(monkeypatch, tmp_path):
+    auth_query = _auth_query(monkeypatch, tmp_path, email="custom@example.com")
     generate_calls: list[dict] = []
 
     def fake_generate_reply(**kwargs):
@@ -173,7 +194,7 @@ def test_session_start_keeps_custom_background_for_reply_generation(monkeypatch)
     )
     client = TestClient(app)
 
-    with client.websocket_connect("/ws/session/realtime-custom") as websocket:
+    with client.websocket_connect(f"/ws/session/realtime-custom{auth_query}") as websocket:
         websocket.send_json(
             {
                 "type": "session.start",
@@ -207,7 +228,8 @@ def test_session_start_keeps_custom_background_for_reply_generation(monkeypatch)
     assert generate_calls[0]["custom_background"] == "The learner must explain a project delay to a demanding client."
 
 
-def test_audio_append_publishes_analysis_before_tts(monkeypatch):
+def test_audio_append_publishes_analysis_before_tts(monkeypatch, tmp_path):
+    auth_query = _auth_query(monkeypatch, tmp_path)
     order: list[str] = []
 
     async def fake_publish(event):
@@ -222,7 +244,7 @@ def test_audio_append_publishes_analysis_before_tts(monkeypatch):
     monkeypatch.setattr("app.modules.conversation.router.synthesize_reply_audio", fake_synthesize)
     client = TestClient(app)
 
-    with client.websocket_connect("/ws/session/realtime-3") as websocket:
+    with client.websocket_connect(f"/ws/session/realtime-3{auth_query}") as websocket:
         websocket.send_json(
             {
                 "type": "session.start",
@@ -252,7 +274,8 @@ def test_audio_append_publishes_analysis_before_tts(monkeypatch):
     assert order == ["publish", "tts"]
 
 
-def test_audio_append_does_not_wait_for_slow_tts(monkeypatch):
+def test_audio_append_does_not_wait_for_slow_tts(monkeypatch, tmp_path):
+    auth_query = _auth_query(monkeypatch, tmp_path)
     tts_started = threading.Event()
     tts_release = threading.Event()
     order: list[str] = []
@@ -269,7 +292,7 @@ def test_audio_append_does_not_wait_for_slow_tts(monkeypatch):
     monkeypatch.setattr("app.modules.conversation.router.synthesize_reply_audio", slow_synthesize)
     client = TestClient(app)
 
-    with client.websocket_connect("/ws/session/realtime-4") as websocket:
+    with client.websocket_connect(f"/ws/session/realtime-4{auth_query}") as websocket:
         websocket.send_json(
             {
                 "type": "session.start",
@@ -305,7 +328,8 @@ def test_audio_append_does_not_wait_for_slow_tts(monkeypatch):
     assert order == ["tts_started", "tts_done"]
 
 
-def test_audio_append_uses_previous_turn_history(monkeypatch):
+def test_audio_append_uses_previous_turn_history(monkeypatch, tmp_path):
+    auth_query = _auth_query(monkeypatch, tmp_path)
     generate_calls: list[dict] = []
 
     def fake_generate_reply(**kwargs):
@@ -325,7 +349,7 @@ def test_audio_append_uses_previous_turn_history(monkeypatch):
     )
     client = TestClient(app)
 
-    with client.websocket_connect("/ws/session/realtime-5") as websocket:
+    with client.websocket_connect(f"/ws/session/realtime-5{auth_query}") as websocket:
         websocket.send_json(
             {
                 "type": "session.start",
@@ -375,7 +399,8 @@ def test_audio_append_uses_previous_turn_history(monkeypatch):
     assert generate_calls[1]["user_text"] == "Second answer"
 
 
-def test_audio_append_streams_reply_audio_by_segments(monkeypatch):
+def test_audio_append_streams_reply_audio_by_segments(monkeypatch, tmp_path):
+    auth_query = _auth_query(monkeypatch, tmp_path)
     synthesized_segments: list[str] = []
 
     def fake_generate_reply(**_kwargs):
@@ -390,7 +415,7 @@ def test_audio_append_streams_reply_audio_by_segments(monkeypatch):
     monkeypatch.setattr("app.modules.conversation.router.synthesize_reply_audio", fake_synthesize)
     client = TestClient(app)
 
-    with client.websocket_connect("/ws/session/realtime-6") as websocket:
+    with client.websocket_connect(f"/ws/session/realtime-6{auth_query}") as websocket:
         websocket.send_json(
             {
                 "type": "session.start",

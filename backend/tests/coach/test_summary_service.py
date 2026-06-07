@@ -8,6 +8,7 @@ from app.modules.coach import summary_service
 def _event(session_id="s1", turn_id="t1", scene_id="interview", **kwargs):
     return TurnTranscriptReadyEvent(
         session_id=session_id,
+        user_id="user-1",
         turn_id=turn_id,
         scene_id=scene_id,
         difficulty=1,
@@ -59,6 +60,14 @@ def test_single_analyzed_turn():
     assert summary.pron_avg == 78.0
     assert summary.grammar_score == 72.0
     assert summary.corrections_count == 1
+
+
+def test_returns_none_for_other_users_session():
+    record = coach_store.init_turn(_event())
+    record.pronunciation = _pron(overall=78.0)
+    coach_store.set_status("s1", "t1", "analyzed")
+
+    assert summary_service.build_summary("s1", user_id="user-2") is None
 
 
 def test_multi_turn_averages_correct():
