@@ -128,6 +128,7 @@ import axios from 'axios'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
 import { blobToBase64, encodeWav, getAudioContextCtor, getAudioMimeType, mergeFloat32Chunks } from '@/core/audio'
+import { useAppStore } from '@/core/store'
 import type {
   ShadowingAssessmentResponse,
   ShadowingItem,
@@ -141,6 +142,7 @@ const props = defineProps<{
   summary: SessionSummaryResponse
 }>()
 
+const store = useAppStore()
 const items = ref<ShadowingItem[]>([])
 const loading = ref(false)
 const panelError = ref('')
@@ -165,13 +167,23 @@ const recordingSupported = computed(() => {
 
 const completedCount = computed(() => Object.keys(results).length)
 
+function authHeaders() {
+  return store.authToken
+    ? {
+        Authorization: `Bearer ${store.authToken}`,
+      }
+    : undefined
+}
+
 async function loadItems() {
   loading.value = true
   panelError.value = ''
   clearRecord(results)
   clearRecord(ttsCache)
   try {
-    const response = await axios.get<ShadowingItemsResponse>(`/api/sessions/${props.sessionId}/shadowing/items`)
+    const response = await axios.get<ShadowingItemsResponse>(`/api/sessions/${props.sessionId}/shadowing/items`, {
+      headers: authHeaders(),
+    })
     items.value = response.data.items.length ? response.data.items : fallbackItems()
   } catch {
     items.value = fallbackItems()
@@ -211,9 +223,15 @@ async function playStandard(item: ShadowingItem) {
   stopPlaying()
   try {
     if (!ttsCache[item.id]) {
-      const response = await axios.post<ShadowingTtsResponse>('/api/shadowing/tts', {
-        text: item.text,
-      })
+      const response = await axios.post<ShadowingTtsResponse>(
+        '/api/shadowing/tts',
+        {
+          text: item.text,
+        },
+        {
+          headers: authHeaders(),
+        },
+      )
       ttsCache[item.id] = response.data
     }
     const audioPayload = ttsCache[item.id]
@@ -314,6 +332,9 @@ async function stopRecording(item: ShadowingItem) {
         text: item.text,
         audio_b64: audioB64,
         audio_format: 'wav_pcm16',
+      },
+      {
+        headers: authHeaders(),
       },
     )
     results[item.id] = response.data
