@@ -15,9 +15,11 @@ app.add_middleware(
 
 
 def _register_modules() -> None:
+    from app.modules.auth.register import register_auth
     from app.modules.coach.register import register_coach
     from app.modules.conversation.register import register_conversation
 
+    register_auth(app)
     register_conversation(app)
     register_coach(app)
 

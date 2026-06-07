@@ -12,9 +12,7 @@
               <div class="text-xs text-slate-500">AI 英语口语陪练</div>
             </div>
           </div>
-          <div class="rounded-full border border-indigo-100 bg-indigo-50 px-4 py-2 text-xs font-medium text-indigo-600">
-            练习记录
-          </div>
+          <UserAccountBadge />
         </div>
       </div>
 
@@ -123,6 +121,7 @@ import { computed } from 'vue'
 import { SCENES } from '@/core/scenes'
 import { useAppStore } from '@/core/store'
 import { ws } from '@/core/ws'
+import UserAccountBadge from '@/modules/auth/UserAccountBadge.vue'
 
 const store = useAppStore()
 
@@ -158,7 +157,7 @@ async function start(sceneId: string) {
   })
 
   try {
-    await ws.connect(sessionId)
+    await ws.connect(sessionId, store.authToken)
     ws.send({
       type: 'session.start',
       session_id: sessionId,

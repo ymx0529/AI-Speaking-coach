@@ -22,6 +22,7 @@ def _to_transcript_event(event: object) -> TurnTranscriptReadyEvent | None:
     if isinstance(event, SpeakerTurnEvent):
         return TurnTranscriptReadyEvent(
             session_id=event.session_id,
+            user_id=event.user_id,
             turn_id=event.turn_id,
             scene_id=event.scene_id,
             difficulty=1,
@@ -44,7 +45,7 @@ async def on_turn_event(event: object) -> None:
     record = coach_store.init_turn(transcript_event)
 
     # Run pronunciation and correction in parallel
-    pron_score, (issues, grammar_score, expr_score, vocab_score) = await asyncio.gather(
+    pron_score, (issues, grammar_score, expr_score, vocab_score, sample_answer) = await asyncio.gather(
         pronunciation_service.assess(
             transcript=transcript_event.transcript,
             wav_audio_b64=transcript_event.audio_b64,
@@ -62,6 +63,7 @@ async def on_turn_event(event: object) -> None:
     record.grammar_score = grammar_score
     record.expression_score = expr_score
     record.vocabulary_score = vocab_score
+    record.sample_answer = sample_answer
     coach_store.set_status(transcript_event.session_id, transcript_event.turn_id, "analyzed")
 
     # Push pronunciation result
@@ -82,5 +84,9 @@ async def on_turn_event(event: object) -> None:
             transcript_event.session_id,
             transcript_event.turn_id,
             issues,
+            grammar_score=grammar_score,
+            expression_score=expr_score,
+            vocabulary_score=vocab_score,
+            sample_answer=sample_answer,
         ),
     )
